@@ -1,0 +1,293 @@
+import { useState, useEffect } from 'react';
+import { db } from '../config/firebase';
+import { collection, addDoc, onSnapshot, query, updateDoc, doc } from 'firebase/firestore';
+import { Cog6ToothIcon } from '@heroicons/react/24/outline';
+
+interface TeamMember {
+  name: string;
+  email?: string;
+  role?: string;
+}
+
+interface Team {
+  id: string;
+  name: string;
+  members: TeamMember[];
+  leadEngineer?: string;
+  createdAt?: any;
+}
+
+const TeamsList = () => {
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null);
+  const [memberCount, setMemberCount] = useState('');
+  const [memberNames, setMemberNames] = useState<string[]>([]);
+  const [teamName, setTeamName] = useState('');
+  const [leadEngineer, setLeadEngineer] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const teamsRef = collection(db, 'teams');
+    const q = query(teamsRef);
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const teamsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Team[];
+      
+      setTeams(teamsData);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleCreateTeam = async () => {
+    if (memberNames.length === 0 || !teamName.trim()) return;
+
+    try {
+      const newTeam = {
+        name: teamName.trim(),
+        members: memberNames.map(name => ({ 
+          name: name.trim(),
+          email: '',
+          role: 'member'
+        })),
+        leadEngineer: leadEngineer.trim(),
+        createdAt: new Date()
+      };
+
+      await addDoc(collection(db, 'teams'), newTeam);
+      setIsModalOpen(false);
+      setMemberCount('');
+      setMemberNames([]);
+      setTeamName('');
+      setLeadEngineer('');
+    } catch (error) {
+      console.error('Error creating team:', error);
+    }
+  };
+
+  const handleEditTeam = (team: Team) => {
+    setEditingTeam(team);
+    setTeamName(team.name);
+    setMemberNames(team.members.map(member => member.name));
+    setLeadEngineer(team.leadEngineer || '');
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateTeam = async () => {
+    if (!editingTeam) return;
+
+    try {
+      const updatedTeam = {
+        name: teamName.trim(),
+        members: memberNames.map(name => ({ 
+          name: name.trim(),
+          email: '',
+          role: 'member'
+        })),
+        leadEngineer: leadEngineer.trim()
+      };
+
+      const teamDocRef = doc(db, 'teams', editingTeam.id);
+      await updateDoc(teamDocRef, updatedTeam);
+      setIsEditModalOpen(false);
+      setEditingTeam(null);
+    } catch (error) {
+      console.error('Error updating team:', error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-80">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
+      <div className="flex justify-between mb-6">
+        <h4 className="text-xl font-semibold text-black dark:text-white">Teams</h4>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-center font-medium text-white hover:bg-opacity-90"
+        >
+          Create Team
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-3 2xl:gap-7.5">
+        {teams.length === 0 ? (
+          <div className="col-span-full text-center py-8 text-gray-500 dark:text-gray-400">
+            No teams created yet. Click "Create Team" to create your first team.
+          </div>
+        ) : (
+          teams.map((team) => (
+            <div key={team.id} className="rounded-sm border border-stroke bg-white p-4 shadow-default dark:border-strokedark dark:bg-boxdark">
+              <div className="flex justify-between items-center mb-4">
+                <h5 className="text-lg font-medium text-black dark:text-white">{team.name}</h5>
+                <Cog6ToothIcon
+                  className="h-5 w-5 text-gray-500 hover:text-primary cursor-pointer"
+                  onClick={() => handleEditTeam(team)}
+                />
+              </div>
+              {team.leadEngineer && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  Lead Engineer: {team.leadEngineer}
+                </p>
+              )}
+              <div className="space-y-2">
+                {team.members.map((member, index) => (
+                  <div key={index} className="flex items-center space-x-2">
+                    <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600">
+                      {member.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-black dark:text-white">{member.name}</span>
+                      {member.role && (
+                        <span className="text-xs text-gray-500">{member.role}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white dark:bg-boxdark p-6 rounded-lg w-96">
+            <h3 className="text-xl font-semibold mb-4">Create New Team</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Team Name</label>
+                <input
+                  type="text"
+                  value={teamName}
+                  onChange={(e) => setTeamName(e.target.value)}
+                  className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-3 font-medium outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:focus:border-primary"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Lead Engineer</label>
+                <input
+                  type="text"
+                  value={leadEngineer}
+                  onChange={(e) => setLeadEngineer(e.target.value)}
+                  className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-3 font-medium outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:focus:border-primary"
+                  placeholder="Enter lead engineer name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Number of Members</label>
+                <input
+                  type="number"
+                  value={memberCount}
+                  onChange={(e) => {
+                    setMemberCount(e.target.value);
+                    setMemberNames(new Array(parseInt(e.target.value) || 0).fill(''));
+                  }}
+                  className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-3 font-medium outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:focus:border-primary"
+                />
+              </div>
+
+              {memberNames.map((name, index) => (
+                <div key={index} className="mb-4">
+                  <label className="block text-sm font-medium mb-1">Member {index + 1} name</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => {
+                      const newNames = [...memberNames];
+                      newNames[index] = e.target.value;
+                      setMemberNames(newNames);
+                    }}
+                    className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-3 font-medium outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:focus:border-primary"
+                  />
+                </div>
+              ))}
+
+              <div className="flex justify-end gap-4">
+                <button
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setTeamName('');
+                    setLeadEngineer('');
+                    setMemberCount('');
+                    setMemberNames([]);
+                  }}
+                  className="inline-flex items-center justify-center rounded-md border border-stroke py-2 px-6 text-center font-medium text-black hover:bg-opacity-90 dark:border-strokedark dark:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateTeam}
+                  disabled={!teamName.trim() || memberNames.length === 0 || memberNames.some(name => !name.trim())}
+                  className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-center font-medium text-white hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Create
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Team Modal */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-lg p-6 bg-white rounded-md shadow-lg">
+            <h3 className="mb-4 text-lg font-medium text-black">Edit Team</h3>
+            <input
+              type="text"
+              value={teamName}
+              onChange={(e) => setTeamName(e.target.value)}
+              placeholder="Team Name"
+              className="w-full mb-4 p-2 border border-gray-300 rounded"
+            />
+            <input
+              type="text"
+              value={leadEngineer}
+              onChange={(e) => setLeadEngineer(e.target.value)}
+              placeholder="Lead Engineer"
+              className="w-full mb-4 p-2 border border-gray-300 rounded"
+            />
+            <textarea
+              value={memberNames.join(', ')}
+              onChange={(e) => setMemberNames(e.target.value.split(',').map(name => name.trim()))}
+              placeholder="Member Names (comma separated)"
+              className="w-full mb-4 p-2 border border-gray-300 rounded"
+            />
+            <div className="flex justify-end">
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="mr-2 inline-flex items-center justify-center rounded-md bg-gray-300 py-2 px-4 text-center font-medium text-black hover:bg-opacity-90"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateTeam}
+                className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-4 text-center font-medium text-white hover:bg-opacity-90"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default TeamsList;
