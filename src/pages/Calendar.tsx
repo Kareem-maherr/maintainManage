@@ -4,7 +4,14 @@ import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
 import EventModal from '../components/Modals/EventModal';
 import EventDetailsModal from '../components/Modals/EventDetailsModal';
 import { db } from '../config/firebase';
-import { collection, getDocs, addDoc, Timestamp, query, orderBy } from 'firebase/firestore';
+import {
+  collection,
+  getDocs,
+  addDoc,
+  Timestamp,
+  query,
+  orderBy,
+} from 'firebase/firestore';
 import '../styles/calendar.css';
 import { format } from 'date-fns';
 
@@ -38,7 +45,12 @@ interface DayEventsModalProps {
   onEventClick: (event: CalendarEvent) => void;
 }
 
-const DayEventsModal = ({ date, events, onClose, onEventClick }: DayEventsModalProps) => {
+const DayEventsModal = ({
+  date,
+  events,
+  onClose,
+  onEventClick,
+}: DayEventsModalProps) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="w-full max-w-lg bg-white rounded-sm shadow-default dark:bg-boxdark p-6">
@@ -64,7 +76,8 @@ const DayEventsModal = ({ date, events, onClose, onEventClick }: DayEventsModalP
                 {event.title}
               </h5>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                {format(event.startDate, 'HH:mm')} - {format(event.endDate, 'HH:mm')}
+                {format(event.startDate, 'HH:mm')} -{' '}
+                {format(event.endDate, 'HH:mm')}
               </p>
             </div>
           ))}
@@ -81,7 +94,9 @@ const CalendarComponent = () => {
   const [isDayModalOpen, setIsDayModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
+    null,
+  );
   const [teams, setTeams] = useState<Team[]>([]);
   const [dayEvents, setDayEvents] = useState<CalendarEvent[]>([]);
 
@@ -90,9 +105,9 @@ const CalendarComponent = () => {
       try {
         const teamsCollection = collection(db, 'teams');
         const teamsSnapshot = await getDocs(teamsCollection);
-        const teamsData = teamsSnapshot.docs.map(doc => ({
+        const teamsData = teamsSnapshot.docs.map((doc) => ({
           id: doc.id,
-          ...doc.data()
+          ...doc.data(),
         })) as Team[];
         setTeams(teamsData);
       } catch (error) {
@@ -105,13 +120,13 @@ const CalendarComponent = () => {
         const eventsCollection = collection(db, 'events');
         const eventsQuery = query(eventsCollection, orderBy('startDate'));
         const eventsSnapshot = await getDocs(eventsQuery);
-        const eventsData = eventsSnapshot.docs.map(doc => {
+        const eventsData = eventsSnapshot.docs.map((doc) => {
           const data = doc.data();
           return {
             id: doc.id,
             ...data,
             startDate: data.startDate.toDate(),
-            endDate: data.endDate.toDate()
+            endDate: data.endDate.toDate(),
           } as CalendarEvent;
         });
         setMyEvents(eventsData);
@@ -126,7 +141,7 @@ const CalendarComponent = () => {
 
   const handleDateClick = (value: Date) => {
     const events = myEvents.filter(
-      event => event.startDate.toDateString() === value.toDateString()
+      (event) => event.startDate.toDateString() === value.toDateString(),
     );
     if (events.length > 0) {
       setSelectedDate(value);
@@ -139,7 +154,7 @@ const CalendarComponent = () => {
   };
 
   const handleEventClick = (event: CalendarEvent) => {
-    const teamDetails = teams.find(team => team.name === event.teamName);
+    const teamDetails = teams.find((team) => team.name === event.teamName);
     setSelectedEvent({
       ...event,
       teamMembers: teamDetails?.members || [],
@@ -153,7 +168,12 @@ const CalendarComponent = () => {
     setIsDetailsModalOpen(true);
   };
 
-  const handleSaveEvent = async (teamName: string, projectId: string) => {
+  const handleEventSave = async (
+    teamId: string,
+    projectId: string,
+    startDate: Date,
+    endDate: Date,
+  ) => {
     const mockProjects = [
       { id: '1', name: 'Al Shaee3 Group' },
       { id: '2', name: 'Dr. Suliman Al Habib' },
@@ -162,26 +182,27 @@ const CalendarComponent = () => {
       { id: '5', name: 'LUCID' },
     ];
 
-    const projectName = mockProjects.find(p => p.id === projectId)?.name || '';
-    
+    const projectName =
+      mockProjects.find((p) => p.id === projectId)?.name || '';
+
     try {
       const newEvent: Omit<CalendarEvent, 'id'> = {
-        title: `${teamName} - ${projectName}`,
-        startDate: selectedDate,
-        endDate: new Date(selectedDate.getTime() + 24 * 60 * 60 * 1000),
-        teamName,
+        title: `${teamId} - ${projectName}`,
+        startDate,
+        endDate,
+        teamName: teamId,
         projectId,
-        projectName
+        projectName,
       };
 
       const eventsCollection = collection(db, 'events');
       const docRef = await addDoc(eventsCollection, {
         ...newEvent,
         startDate: Timestamp.fromDate(newEvent.startDate),
-        endDate: Timestamp.fromDate(newEvent.endDate)
+        endDate: Timestamp.fromDate(newEvent.endDate),
       });
 
-      setMyEvents(prev => [...prev, { ...newEvent, id: docRef.id }]);
+      setMyEvents((prev) => [...prev, { ...newEvent, id: docRef.id }]);
       setIsModalOpen(false);
     } catch (error) {
       console.error('Error saving event:', error);
@@ -191,9 +212,9 @@ const CalendarComponent = () => {
   const tileContent = ({ date, view }: { date: Date; view: string }) => {
     if (view === 'month') {
       const dayEvents = myEvents.filter(
-        event => event.startDate.toDateString() === date.toDateString()
+        (event) => event.startDate.toDateString() === date.toDateString(),
       );
-      
+
       if (dayEvents.length > 0) {
         return (
           <div className="absolute bottom-1 right-1">
@@ -210,9 +231,9 @@ const CalendarComponent = () => {
   const tileClassName = ({ date, view }: { date: Date; view: string }) => {
     if (view === 'month') {
       const hasEvent = myEvents.some(
-        event => event.startDate.toDateString() === date.toDateString()
+        (event) => event.startDate.toDateString() === date.toDateString(),
       );
-      
+
       return `relative ${hasEvent ? 'event-day' : ''}`;
     }
   };
@@ -259,10 +280,11 @@ const CalendarComponent = () => {
 
       {isModalOpen && (
         <EventModal
+          isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
-          onSave={handleSaveEvent}
           teams={teams}
           selectedDate={selectedDate}
+          onSave={handleEventSave}
         />
       )}
 

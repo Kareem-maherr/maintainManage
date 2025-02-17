@@ -15,23 +15,26 @@ const ChartOne = () => {
   const [series, setSeries] = useState([
     {
       name: 'Open Tickets',
-      data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] // Last 12 months
+      data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // Last 12 months
     },
     {
       name: 'Resolved Tickets',
-      data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] // Last 12 months
-    }
+      data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // Last 12 months
+    },
   ]);
 
   useEffect(() => {
-    const ticketsQuery = query(collection(db, 'tickets'), orderBy('createdAt', 'desc'));
-    
+    const ticketsQuery = query(
+      collection(db, 'tickets'),
+      orderBy('createdAt', 'desc'),
+    );
+
     const unsubscribe = onSnapshot(ticketsQuery, (snapshot) => {
-      const ticketsData = snapshot.docs.map(doc => ({
+      const ticketsData = snapshot.docs.map((doc) => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
       })) as Ticket[];
-      
+
       setTickets(ticketsData);
 
       // Get last 12 months
@@ -46,11 +49,12 @@ const ChartOne = () => {
       const resolvedTickets = new Array(12).fill(0);
 
       // Count tickets by month and status
-      ticketsData.forEach(ticket => {
+      ticketsData.forEach((ticket) => {
         const ticketDate = ticket.createdAt.toDate();
-        const monthIndex = months.findIndex(month => 
-          month.getMonth() === ticketDate.getMonth() && 
-          month.getFullYear() === ticketDate.getFullYear()
+        const monthIndex = months.findIndex(
+          (month) =>
+            month.getMonth() === ticketDate.getMonth() &&
+            month.getFullYear() === ticketDate.getFullYear(),
         );
 
         if (monthIndex !== -1) {
@@ -65,12 +69,12 @@ const ChartOne = () => {
       setSeries([
         {
           name: 'Open Tickets',
-          data: openTickets
+          data: openTickets,
         },
         {
           name: 'Resolved Tickets',
-          data: resolvedTickets
-        }
+          data: resolvedTickets,
+        },
       ]);
     });
 
@@ -145,8 +149,8 @@ const ChartOne = () => {
     },
     yaxis: {
       title: {
-        text: 'Number of Tickets'
-      }
+        text: 'Number of Tickets',
+      },
     },
     tooltip: {
       x: {

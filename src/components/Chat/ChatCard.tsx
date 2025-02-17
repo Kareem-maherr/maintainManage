@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, query, orderBy, limit, onSnapshot, getDocs } from 'firebase/firestore';
+import {
+  collection,
+  query,
+  orderBy,
+  limit,
+  onSnapshot,
+  getDocs,
+} from 'firebase/firestore';
 import { db } from '../../config/firebase';
 
 interface TicketMessage {
@@ -32,12 +39,16 @@ const ChatCard = () => {
         console.log('Fetching tickets...');
         // Query for tickets
         const ticketsRef = collection(db, 'tickets');
-        const ticketsQuery = query(ticketsRef, orderBy('createdAt', 'desc'), limit(6));
-        
+        const ticketsQuery = query(
+          ticketsRef,
+          orderBy('createdAt', 'desc'),
+          limit(6),
+        );
+
         // Get initial tickets
         const ticketsSnapshot = await getDocs(ticketsQuery);
         console.log('Tickets found:', ticketsSnapshot.size);
-        
+
         // If no tickets, set loading to false and return
         if (ticketsSnapshot.empty) {
           console.log('No tickets found');
@@ -49,17 +60,27 @@ const ChatCard = () => {
         ticketsSnapshot.forEach((ticketDoc) => {
           const ticketData = ticketDoc.data();
           console.log('Processing ticket:', ticketDoc.id, ticketData);
-          const messagesRef = collection(db, 'tickets', ticketDoc.id, 'messages');
-          const messagesQuery = query(messagesRef, orderBy('timestamp', 'desc'), limit(1));
-          
+          const messagesRef = collection(
+            db,
+            'tickets',
+            ticketDoc.id,
+            'messages',
+          );
+          const messagesQuery = query(
+            messagesRef,
+            orderBy('timestamp', 'desc'),
+            limit(1),
+          );
+
           const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
             // Find the last non-admin message
             const lastMessage = snapshot.docs
-              .find(doc => {
+              .find((doc) => {
                 const msgData = doc.data() as TicketMessage;
                 return msgData.sender !== 'admin@arabemerge.com';
-              })?.data() as TicketMessage | undefined;
-            
+              })
+              ?.data() as TicketMessage | undefined;
+
             // Only create chat if there's a non-admin message
             if (lastMessage) {
               const chat: TicketChat = {
@@ -67,18 +88,24 @@ const ChatCard = () => {
                 title: ticketData.title || 'Untitled Ticket',
                 lastMessage: lastMessage.content,
                 timestamp: lastMessage.timestamp,
-                unreadCount: 0
+                unreadCount: 0,
               };
-              
-              setTicketChats(prev => {
-                const filtered = prev.filter(c => c.ticketId !== chat.ticketId);
-                return [...filtered, chat].sort((a, b) => 
-                  (b.timestamp?.toMillis() || 0) - (a.timestamp?.toMillis() || 0)
+
+              setTicketChats((prev) => {
+                const filtered = prev.filter(
+                  (c) => c.ticketId !== chat.ticketId,
+                );
+                return [...filtered, chat].sort(
+                  (a, b) =>
+                    (b.timestamp?.toMillis() || 0) -
+                    (a.timestamp?.toMillis() || 0),
                 );
               });
             } else {
               // Remove this ticket from the list if it has no non-admin messages
-              setTicketChats(prev => prev.filter(c => c.ticketId !== ticketDoc.id));
+              setTicketChats((prev) =>
+                prev.filter((c) => c.ticketId !== ticketDoc.id),
+              );
             }
           });
 
@@ -97,7 +124,7 @@ const ChatCard = () => {
 
     // Cleanup function
     return () => {
-      unsubscribers.forEach(unsubscribe => unsubscribe());
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
     };
   }, []);
 
@@ -106,8 +133,10 @@ const ChatCard = () => {
     try {
       const now = new Date();
       const messageDate = timestamp.toDate();
-      const diffInMinutes = Math.floor((now.getTime() - messageDate.getTime()) / (1000 * 60));
-      
+      const diffInMinutes = Math.floor(
+        (now.getTime() - messageDate.getTime()) / (1000 * 60),
+      );
+
       if (diffInMinutes < 60) return `${diffInMinutes}m`;
       if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h`;
       return `${Math.floor(diffInMinutes / 1440)}d`;
@@ -149,7 +178,10 @@ const ChatCard = () => {
                     <span className="text-sm text-black dark:text-white">
                       {chat.lastMessage}
                     </span>
-                    <span className="text-xs"> · {getTimeAgo(chat.timestamp)}</span>
+                    <span className="text-xs">
+                      {' '}
+                      · {getTimeAgo(chat.timestamp)}
+                    </span>
                   </p>
                 </div>
                 {chat.unreadCount > 0 && (
@@ -164,7 +196,7 @@ const ChatCard = () => {
           ))
         ) : (
           <div className="text-center py-8 text-gray-500">
-            No ticket conversations found
+            Under Implementation
           </div>
         )}
       </div>

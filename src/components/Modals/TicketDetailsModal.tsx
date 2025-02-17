@@ -38,6 +38,13 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
   const [isSetDateModalOpen, setIsSetDateModalOpen] = useState(false);
 
   useEffect(() => {
+    // Mark messages as read when modal opens
+    const ticketRef = doc(db, "tickets", ticket.id);
+    updateDoc(ticketRef, {
+      lastReadTimestamp: serverTimestamp()
+    });
+
+    // Set up messages listener
     const messagesRef = collection(db, "tickets", ticket.id, "messages");
     const q = query(messagesRef, orderBy("timestamp", "asc"));
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, where, Timestamp, orderBy, Query, getDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, Timestamp, orderBy, Query, getDoc, doc, getDocs, limit } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { getAuth } from 'firebase/auth';
 import TicketDetailsModal from '../Modals/TicketDetailsModal';
@@ -14,6 +14,7 @@ interface FullTicket {
   severity: string;
   status: string;
   responsible_engineer?: string;
+  hasUnreadMessages?: boolean;
 }
 
 interface FilterOptions {
@@ -109,29 +110,42 @@ const FullTicketList = () => {
           ticketsQuery = query(ticketsQuery, where('location', '==', filters.location));
         }
 
-        const unsubscribe = onSnapshot(ticketsQuery, (querySnapshot) => {
-          const formattedTickets = querySnapshot.docs.map((doc) => {
-            const data = doc.data();
-            console.log('Ticket data:', data);
-            return {
+        const unsubscribe = onSnapshot(ticketsQuery, async (snapshot) => {
+          const ticketsData: FullTicket[] = [];
+          
+          for (const doc of snapshot.docs) {
+            const ticketData = doc.data();
+            
+            // Check for unread messages
+            const messagesRef = collection(db, 'tickets', doc.id, 'messages');
+            const lastMessageQuery = query(messagesRef, orderBy('timestamp', 'desc'), limit(1));
+            const lastMessageSnap = await getDocs(lastMessageQuery);
+            
+            const hasUnreadMessages = !lastMessageSnap.empty && 
+              lastMessageSnap.docs[0].data().sender !== currentUser.email && 
+              (!ticketData.lastReadTimestamp || 
+               lastMessageSnap.docs[0].data().timestamp > ticketData.lastReadTimestamp);
+
+            ticketsData.push({
               id: doc.id,
-              title: data.title || '',
-              company: data.company || '',
-              location: data.location || '',
-              createdAt: data.createdAt,
-              severity: data.severity || 'Low',
-              status: data.status || 'Open',
-              responsible_engineer: data.responsible_engineer
-            } as FullTicket;
-          });
+              title: ticketData.title,
+              company: ticketData.company,
+              location: ticketData.location,
+              createdAt: ticketData.createdAt,
+              severity: ticketData.severity,
+              status: ticketData.status,
+              responsible_engineer: ticketData.responsible_engineer,
+              hasUnreadMessages
+            });
+          }
           
           // Update unique companies and locations for filters
-          const uniqueCompanies = [...new Set(formattedTickets.map(ticket => ticket.company))];
-          const uniqueLocations = [...new Set(formattedTickets.map(ticket => ticket.location))];
+          const uniqueCompanies = [...new Set(ticketsData.map(ticket => ticket.company))];
+          const uniqueLocations = [...new Set(ticketsData.map(ticket => ticket.location))];
           setCompanies(['All', ...uniqueCompanies]);
           setLocations(['All', ...uniqueLocations]);
           
-          setTickets(formattedTickets);
+          setTickets(ticketsData);
           setLoading(false);
         });
 
@@ -322,8 +336,11 @@ const FullTicketList = () => {
                 className="cursor-pointer hover:bg-gray-100 dark:hover:bg-meta-4"
               >
                 <td className="border-b border-[#eee] py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
-                  <h5 className="font-medium text-black dark:text-white">
+                  <h5 className="font-medium text-black dark:text-white flex items-center gap-2">
                     {ticket.title}
+                    {ticket.hasUnreadMessages && (
+                      <span className="inline-flex h-2 w-2 rounded-full bg-meta-1"></span>
+                    )}
                   </h5>
                 </td>
                 <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">

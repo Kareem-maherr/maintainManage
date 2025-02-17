@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import {
-  signInWithEmailAndPassword
-} from 'firebase/auth';
-import { auth } from '../../config/firebase';
 import Logo from '../../images/logo/aeco.svg';
+import { useAuth } from '../../contexts/AuthContext';
 
 const SignIn = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -20,10 +18,9 @@ const SignIn = () => {
     setLoading(true);
 
     try {
-      // Set persistence based on remember me checkbox
-      await signInWithEmailAndPassword(auth, email, password);
+      await login(email, password);
       setSuccess('Successfully signed in!');
-      navigate('/dashboard');
+      navigate('/');
     } catch (err: any) {
       console.error('Sign in error:', err);
       setError(err.message || 'Failed to sign in');

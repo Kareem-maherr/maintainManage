@@ -46,21 +46,20 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
   useEffect(() => {
     const fetchResponsibleEngineers = async () => {
       try {
-        const usersRef = collection(db, 'users');
-        const engineersQuery = query(
-          usersRef,
-          where('role', '==', 'engineer')
-        );
+        const engineersRef = collection(db, 'engineers');
+        const engineersQuery = query(engineersRef, where('role', '==', 'engineer'));
         const engineersSnapshot = await getDocs(engineersQuery);
+        
         const engineersList = engineersSnapshot.docs.map(doc => ({
           id: doc.id,
           email: doc.data().email,
-          name: doc.data().displayName || doc.data().email
+          name: doc.data().name || doc.data().email // Use email as fallback if name is not set
         }));
-        console.log('Available engineers:', engineersList);
+        
         setResponsibleEngineers(engineersList);
       } catch (error) {
-        console.error('Error fetching responsible engineers:', error);
+        console.error('Error fetching engineers:', error);
+        setError('Failed to load engineers list');
       }
     };
 
@@ -90,7 +89,7 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
         status: 'Open',
         createdAt: serverTimestamp(),
         createdBy: user.uid,
-        responsible_engineer: ticketData.responsibleEngineer ? responsibleEngineers.find(eng => eng.id === ticketData.responsibleEngineer)?.email : ''
+        responsible_engineer: ticketData.responsibleEngineer ? responsibleEngineers.find(eng => eng.email === ticketData.responsibleEngineer)?.email : ''
       };
 
       console.log('Saving ticket with data:', newTicket); 
@@ -229,13 +228,19 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
             </label>
             <select
               value={ticketData.responsibleEngineer}
-              onChange={(e) => setTicketData({ ...ticketData, responsibleEngineer: e.target.value })}
+              onChange={(e) => {
+                const selectedEngineer = responsibleEngineers.find(eng => eng.id === e.target.value);
+                setTicketData({ 
+                  ...ticketData, 
+                  responsibleEngineer: selectedEngineer ? selectedEngineer.email : '' 
+                });
+              }}
               className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
             >
               <option value="">Select Engineer</option>
               {responsibleEngineers.map((engineer) => (
                 <option key={engineer.id} value={engineer.id}>
-                  {engineer.name}
+                  {engineer.name} ({engineer.email})
                 </option>
               ))}
             </select>
