@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import CardDataStats from '../../components/CardDataStats';
 import ChartOne from '../../components/Charts/ChartOne';
@@ -14,6 +14,8 @@ const ECommerce: React.FC = () => {
     resolved: 0,
     template: 0
   });
+
+  const [calendarTickets, setCalendarTickets] = useState(0);
 
   useEffect(() => {
     const ticketsRef = collection(db, 'tickets');
@@ -37,10 +39,25 @@ const ECommerce: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const fetchCalendarTickets = async () => {
+      try {
+        const eventsCollection = collection(db, 'events');
+        const eventsQuery = query(eventsCollection);
+        const eventsSnapshot = await getDocs(eventsQuery);
+        setCalendarTickets(eventsSnapshot.size);
+      } catch (error) {
+        console.error('Error fetching calendar tickets:', error);
+      }
+    };
+
+    fetchCalendarTickets();
+  }, []);
+
   return (
     <>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-4 2xl:gap-7.5">
-        <CardDataStats title="Total Tickets" total={stats.total.toString()} rate={((stats.total - stats.resolved) / stats.total * 100).toFixed(1) + '%'} levelUp>
+        <CardDataStats title="Total Emergency Tickets" total={stats.total.toString()} rate={((stats.total - stats.resolved) / stats.total * 100).toFixed(1) + '%'} levelUp>
           <svg
             className="fill-primary dark:fill-white"
             width="22"
@@ -59,7 +76,7 @@ const ECommerce: React.FC = () => {
             />
           </svg>
         </CardDataStats>
-        <CardDataStats title="Open Tickets" total={stats.open.toString()} rate={((stats.open / stats.total) * 100).toFixed(1) + '%'} levelUp>
+        <CardDataStats title="Open Emergency Tickets" total={stats.open.toString()} rate={((stats.open / stats.total) * 100).toFixed(1) + '%'} levelUp>
           <svg
             className="fill-primary dark:fill-white"
             width="20"
@@ -78,7 +95,7 @@ const ECommerce: React.FC = () => {
             />
           </svg>
         </CardDataStats>
-        <CardDataStats title="Resolved Tickets" total={stats.resolved.toString()} rate={((stats.resolved / stats.total) * 100).toFixed(1) + '%'} levelDown>
+        <CardDataStats title="Resolved Emergency Tickets" total={stats.resolved.toString()} rate={((stats.resolved / stats.total) * 100).toFixed(1) + '%'} levelDown>
           <svg
             className="fill-primary dark:fill-white"
             width="22"
@@ -93,7 +110,7 @@ const ECommerce: React.FC = () => {
             />
           </svg>
         </CardDataStats>
-        <CardDataStats title="Templates" total={stats.template.toString()} rate="Available" levelUp>
+        <CardDataStats title="Total Scheduled Tickets" total={calendarTickets.toString()} rate="Maintenance" levelUp>
           <svg
             className="fill-primary dark:fill-white"
             width="22"

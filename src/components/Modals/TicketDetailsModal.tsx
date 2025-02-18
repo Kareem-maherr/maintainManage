@@ -35,6 +35,7 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
   const [newMessage, setNewMessage] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [editedTicket, setEditedTicket] = useState(ticket);
+  const [localTicket, setLocalTicket] = useState(ticket);
   const [isSetDateModalOpen, setIsSetDateModalOpen] = useState(false);
 
   useEffect(() => {
@@ -44,11 +45,20 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
       lastReadTimestamp: serverTimestamp()
     });
 
+    // Set up ticket listener
+    const unsubscribeTicket = onSnapshot(doc(db, "tickets", ticket.id), (doc) => {
+      if (doc.exists()) {
+        const updatedTicket = { id: doc.id, ...doc.data() };
+        setLocalTicket(updatedTicket);
+        setEditedTicket(updatedTicket);
+      }
+    });
+
     // Set up messages listener
     const messagesRef = collection(db, "tickets", ticket.id, "messages");
     const q = query(messagesRef, orderBy("timestamp", "asc"));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribeMessages = onSnapshot(q, (snapshot) => {
       const messageData = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
@@ -56,7 +66,10 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
       setMessages(messageData);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeTicket();
+      unsubscribeMessages();
+    };
   }, [ticket.id]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -96,8 +109,10 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
     try {
       const ticketRef = doc(db, 'tickets', ticket.id);
       await updateDoc(ticketRef, {
-        status: newStatus
+        status: newStatus,
+        updatedAt: serverTimestamp()
       });
+      setLocalTicket(prev => ({ ...prev, status: newStatus }));
       await notifyTicketUpdated(ticket.id, ticket.title, `status changed to ${newStatus}`);
     } catch (error) {
       console.error('Error updating ticket status:', error);
@@ -108,8 +123,10 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
     try {
       const ticketRef = doc(db, 'tickets', ticket.id);
       await updateDoc(ticketRef, {
-        severity: newPriority
+        severity: newPriority,
+        updatedAt: serverTimestamp()
       });
+      setLocalTicket(prev => ({ ...prev, severity: newPriority }));
       await notifyTicketUpdated(ticket.id, ticket.title, `priority changed to ${newPriority}`);
     } catch (error) {
       console.error('Error updating ticket priority:', error);
@@ -186,32 +203,32 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
                   className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
                 />
               ) : (
-                ticket.location
+                localTicket.location
               )}
             </p>
           </div>
           <div>
             <p className="text-sm text-gray-600 dark:text-gray-400">Severity</p>
-            <p className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${severityStyles[ticket.severity as keyof typeof severityStyles]}`}>
+            <p className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${severityStyles[localTicket.severity as keyof typeof severityStyles]}`}>
               {isEditing ? (
                 <select
                   value={editedTicket.severity}
                   onChange={(e) => handlePriorityChange(e.target.value)}
                   className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
                 >
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
                   <option value="Critical">Critical</option>
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
                 </select>
               ) : (
-                ticket.severity
+                localTicket.severity
               )}
             </p>
           </div>
           <div>
             <p className="text-sm text-gray-600 dark:text-gray-400">Status</p>
-            <p className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${statusStyles[ticket.status as keyof typeof statusStyles]}`}>
+            <p className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${statusStyles[localTicket.status as keyof typeof statusStyles]}`}>
               {isEditing ? (
                 <select
                   value={editedTicket.status}
@@ -223,7 +240,7 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
                   <option value="Resolved">Resolved</option>
                 </select>
               ) : (
-                ticket.status
+                localTicket.status
               )}
             </p>
           </div>

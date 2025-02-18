@@ -4,6 +4,7 @@ import { db } from '../../config/firebase';
 import { getAuth } from 'firebase/auth';
 import TicketDetailsModal from '../Modals/TicketDetailsModal';
 import NewTicketModal from '../Modals/NewTicketModal';
+import PDFGeneratorModal from '../Modals/PDFGeneratorModal';
 
 interface FullTicket {
   id: string;
@@ -31,6 +32,7 @@ const FullTicketList = () => {
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState<FullTicket | null>(null);
   const [showNewTicketModal, setShowNewTicketModal] = useState(false);
+  const [showPDFModal, setShowPDFModal] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({
     startDate: '',
     endDate: '',
@@ -178,6 +180,24 @@ const FullTicketList = () => {
     });
   };
 
+  const getTimeElapsed = (createdAt: any) => {
+    if (!createdAt) return 'N/A';
+    
+    const now = new Date();
+    const created = createdAt.toDate();
+    const elapsed = now.getTime() - created.getTime();
+    
+    const seconds = Math.floor(elapsed / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) return `${days} day${days > 1 ? 's' : ''}`;
+    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''}`;
+    if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+    return 'Just now';
+  };
+
   if (loading) {
     return (
       <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
@@ -199,6 +219,35 @@ const FullTicketList = () => {
 
       {showNewTicketModal && (
         <NewTicketModal onClose={() => setShowNewTicketModal(false)} />
+      )}
+
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h4 className="text-xl font-semibold text-black dark:text-white mb-1">
+            All Tickets
+          </h4>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Overview of all tickets and their status
+          </p>
+        </div>
+        <div className="flex gap-4">
+          <button
+            onClick={() => setShowNewTicketModal(true)}
+            className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
+          >
+            Create New Ticket
+          </button>
+          <button
+            onClick={() => setShowPDFModal(true)}
+            className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
+          >
+            Generate PDF
+          </button>
+        </div>
+      </div>
+
+      {showPDFModal && (
+        <PDFGeneratorModal onClose={() => setShowPDFModal(false)} />
       )}
       
       {/* Filter Controls */}
@@ -233,8 +282,8 @@ const FullTicketList = () => {
             onChange={handleFilterChange}
             className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
           >
-            {companies.map(company => (
-              <option key={company} value={company}>{company}</option>
+            {companies.map((company, index) => (
+              <option key={company || `company-${index}`} value={company}>{company}</option>
             ))}
           </select>
         </div>
@@ -247,8 +296,8 @@ const FullTicketList = () => {
             onChange={handleFilterChange}
             className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
           >
-            {severityOptions.map(severity => (
-              <option key={severity} value={severity}>{severity}</option>
+            {severityOptions.map((severity, index) => (
+              <option key={severity || `severity-${index}`} value={severity}>{severity}</option>
             ))}
           </select>
         </div>
@@ -261,8 +310,8 @@ const FullTicketList = () => {
             onChange={handleFilterChange}
             className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
           >
-            {statusOptions.map(status => (
-              <option key={status} value={status}>{status}</option>
+            {statusOptions.map((status, index) => (
+              <option key={status || `status-${index}`} value={status}>{status}</option>
             ))}
           </select>
         </div>
@@ -275,26 +324,14 @@ const FullTicketList = () => {
             onChange={handleFilterChange}
             className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
           >
-            {locations.map(location => (
-              <option key={location} value={location}>{location}</option>
+            {locations.map((location, index) => (
+              <option key={location || `location-${index}`} value={location}>{location}</option>
             ))}
           </select>
         </div>
       </div>
 
       <div className="mb-4 flex justify-between items-center">
-        <button
-          onClick={() => setShowNewTicketModal(true)}
-          className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
-        >
-          Create New Ticket
-        </button>
-        <button
-          onClick={() => setShowNewTicketModal(true)}
-          className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
-        >
-          Generate PDF
-        </button>
         <button
           onClick={clearFilters}
           className="inline-flex items-center justify-center rounded-md border border-stroke py-2 px-6 text-center font-medium text-black hover:bg-opacity-90 dark:border-strokedark dark:text-white"
@@ -314,32 +351,36 @@ const FullTicketList = () => {
               <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white">
                 Company
               </th>
-              <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white">
+              <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white">
                 Location
               </th>
               <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white">
-                Date
+                Created
               </th>
               <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white">
+                Time Open
+              </th>
+              <th className="py-4 px-4 font-medium text-black dark:text-white">
                 Severity
               </th>
               <th className="py-4 px-4 font-medium text-black dark:text-white">
                 Status
               </th>
+              {isResponsibleEngineer && (
+                <th className="py-4 px-4 font-medium text-black dark:text-white">
+                  Engineer
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
-            {tickets.map((ticket) => (
-              <tr 
-                key={ticket.id}
-                onClick={() => setSelectedTicket(ticket)}
-                className="cursor-pointer hover:bg-gray-100 dark:hover:bg-meta-4"
-              >
+            {tickets.map((ticket, key) => (
+              <tr key={ticket.id} onClick={() => setSelectedTicket(ticket)} className="cursor-pointer hover:bg-gray-1 dark:hover:bg-meta-4">
                 <td className="border-b border-[#eee] py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
-                  <h5 className="font-medium text-black dark:text-white flex items-center gap-2">
+                  <h5 className="font-medium text-black dark:text-white">
                     {ticket.title}
                     {ticket.hasUnreadMessages && (
-                      <span className="inline-flex h-2 w-2 rounded-full bg-meta-1"></span>
+                      <span className="ml-2 inline-flex h-2 w-2 rounded-full bg-meta-1"></span>
                     )}
                   </h5>
                 </td>
@@ -355,15 +396,27 @@ const FullTicketList = () => {
                   </p>
                 </td>
                 <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
-                  <p className={getSeverityColor(ticket.severity)}>
+                  <p className="text-black dark:text-white">
+                    {getTimeElapsed(ticket.createdAt)}
+                  </p>
+                </td>
+                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
+                  <p className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${getSeverityColor(ticket.severity)}`}>
                     {ticket.severity}
                   </p>
                 </td>
                 <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
-                  <p className={`inline-flex rounded-full py-1 px-3 text-sm font-medium ${getStatusColor(ticket.status)}`}>
+                  <p className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${getStatusColor(ticket.status)}`}>
                     {ticket.status}
                   </p>
                 </td>
+                {isResponsibleEngineer && (
+                  <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
+                    <p className="text-black dark:text-white">
+                      {ticket.responsible_engineer || 'Unassigned'}
+                    </p>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

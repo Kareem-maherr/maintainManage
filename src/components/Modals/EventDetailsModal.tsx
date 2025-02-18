@@ -5,8 +5,10 @@ interface TeamMember {
 }
 
 interface ProjectDetails {
+  title: string;
   projectManager: string;
   leadEngineer?: string;
+  responsibleEngineer?: string;
   location: string;
   email: string;
   phone: string;
@@ -31,7 +33,7 @@ const EventDetailsModal = ({ isOpen, onClose, event }: EventDetailsModalProps) =
       <div className="rounded-sm bg-white p-8 dark:bg-boxdark w-[600px] max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h4 className="text-xl font-semibold text-black dark:text-white">
-            Project Details
+            {event.title}
           </h4>
           <button
             onClick={onClose}
@@ -105,6 +107,20 @@ const EventDetailsModal = ({ isOpen, onClose, event }: EventDetailsModalProps) =
               <p className="text-black dark:text-white">
                 {event.startDate.toLocaleDateString()} - {event.endDate.toLocaleDateString()}
               </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">
+                Lead Engineer
+              </label>
+              <p className="text-black dark:text-white">{event.leadEngineer}</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">
+                Responsible Engineer
+              </label>
+              <p className="text-black dark:text-white">{event.responsibleEngineer || 'Not assigned'}</p>
             </div>
           </div>
 

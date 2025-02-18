@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import Logo from '../../images/logo/aeco.svg';
+import Logo from '../../../public/newLogo.png';
 import { useAuth } from '../../contexts/AuthContext';
 
 const SignIn = () => {
@@ -35,10 +35,10 @@ const SignIn = () => {
       {/* Left Side - Image */}
       <div className="hidden w-1/2 bg-graydark lg:block">
         <div className="flex h-full flex-col items-center justify-center px-20 text-white">
-          <img src={Logo} alt="Logo" className="mb-10 w-48" />
-          <h2 className="mb-4 text-3xl font-bold">Arab Emergency Management</h2>
+          <img src={Logo} alt="Logo" className=" w-96" />
+          <h2 className="mb-4 text-3xl font-bold">شركة الطوارى العربية للسلامة</h2>
           <p className="text-center text-lg">
-            Manage your emergency tickets efficiently and effectively
+            Manage your maintenance tickets efficiently and effectively
           </p>
         </div>
       </div>
@@ -49,7 +49,7 @@ const SignIn = () => {
           <div className="w-full max-w-[440px]">
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-black dark:text-white">
-                Welcome to Arab Emergency
+                Welcome
               </h2>
               <p className="mt-2 text-gray-600 dark:text-gray-400">
                 Please sign in to continue

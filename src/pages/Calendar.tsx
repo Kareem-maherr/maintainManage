@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Calendar from 'react-calendar';
 import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
 import EventModal from '../components/Modals/EventModal';
+import DayEventsModal from '../components/Modals/DayEventsModal';
 import EventDetailsModal from '../components/Modals/EventDetailsModal';
 import { db } from '../config/firebase';
 import {
@@ -36,56 +37,8 @@ interface CalendarEvent {
   email?: string;
   phone?: string;
   leadEngineer?: string;
+  responsibleEngineer?: string;
 }
-
-interface DayEventsModalProps {
-  date: Date;
-  events: CalendarEvent[];
-  onClose: () => void;
-  onEventClick: (event: CalendarEvent) => void;
-}
-
-const DayEventsModal = ({
-  date,
-  events,
-  onClose,
-  onEventClick,
-}: DayEventsModalProps) => {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="w-full max-w-lg bg-white rounded-sm shadow-default dark:bg-boxdark p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h4 className="text-xl font-semibold text-black dark:text-white">
-            Events for {format(date, 'MMMM d, yyyy')}
-          </h4>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            ×
-          </button>
-        </div>
-        <div className="max-h-[60vh] overflow-y-auto">
-          {events.map((event, index) => (
-            <div
-              key={event.id || index}
-              onClick={() => onEventClick(event)}
-              className="p-4 mb-2 border border-stroke rounded-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-meta-4 transition-colors duration-200"
-            >
-              <h5 className="text-base font-medium text-black dark:text-white mb-1">
-                {event.title}
-              </h5>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {format(event.startDate, 'HH:mm')} -{' '}
-                {format(event.endDate, 'HH:mm')}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const CalendarComponent = () => {
   const [date, setDate] = useState(new Date());
@@ -140,17 +93,20 @@ const CalendarComponent = () => {
   }, []);
 
   const handleDateClick = (value: Date) => {
-    const events = myEvents.filter(
-      (event) => event.startDate.toDateString() === value.toDateString(),
-    );
-    if (events.length > 0) {
-      setSelectedDate(value);
-      setDayEvents(events);
-      setIsDayModalOpen(true);
-    } else {
-      setSelectedDate(value);
-      setIsModalOpen(true);
-    }
+    const events = myEvents.filter((event) => {
+      const eventDate = new Date(event.startDate);
+      const clickedDate = new Date(value);
+      
+      return (
+        eventDate.getFullYear() === clickedDate.getFullYear() &&
+        eventDate.getMonth() === clickedDate.getMonth() &&
+        eventDate.getDate() === clickedDate.getDate()
+      );
+    });
+    
+    setSelectedDate(value);
+    setDayEvents(events);
+    setIsDayModalOpen(true);
   };
 
   const handleEventClick = (event: CalendarEvent) => {
@@ -164,8 +120,8 @@ const CalendarComponent = () => {
       phone: '',
       leadEngineer: teamDetails?.leadEngineer || '',
     });
-    setIsDayModalOpen(false);
     setIsDetailsModalOpen(true);
+    setIsDayModalOpen(false);
   };
 
   const handleEventSave = async (
@@ -173,6 +129,8 @@ const CalendarComponent = () => {
     projectId: string,
     startDate: Date,
     endDate: Date,
+    responsibleEngineer?: string,
+    eventTitle: string,
   ) => {
     const mockProjects = [
       { id: '1', name: 'Al Shaee3 Group' },
@@ -186,20 +144,28 @@ const CalendarComponent = () => {
       mockProjects.find((p) => p.id === projectId)?.name || '';
 
     try {
+      const team = teams.find((t) => t.name === teamId);
       const newEvent: Omit<CalendarEvent, 'id'> = {
-        title: `${teamId} - ${projectName}`,
+        title: eventTitle,
         startDate,
         endDate,
         teamName: teamId,
         projectId,
         projectName,
+        teamMembers: team?.members || [],
+        projectManager: '',
+        location: '',
+        email: '',
+        phone: '',
+        leadEngineer: team?.leadEngineer || '',
+        responsibleEngineer,
       };
 
       const eventsCollection = collection(db, 'events');
       const docRef = await addDoc(eventsCollection, {
         ...newEvent,
-        startDate: Timestamp.fromDate(newEvent.startDate),
-        endDate: Timestamp.fromDate(newEvent.endDate),
+        startDate: Timestamp.fromDate(startDate),
+        endDate: Timestamp.fromDate(endDate),
       });
 
       setMyEvents((prev) => [...prev, { ...newEvent, id: docRef.id }]);
@@ -211,9 +177,16 @@ const CalendarComponent = () => {
 
   const tileContent = ({ date, view }: { date: Date; view: string }) => {
     if (view === 'month') {
-      const dayEvents = myEvents.filter(
-        (event) => event.startDate.toDateString() === date.toDateString(),
-      );
+      const dayEvents = myEvents.filter((event) => {
+        const eventDate = new Date(event.startDate);
+        const clickedDate = new Date(date);
+        
+        return (
+          eventDate.getFullYear() === clickedDate.getFullYear() &&
+          eventDate.getMonth() === clickedDate.getMonth() &&
+          eventDate.getDate() === clickedDate.getDate()
+        );
+      });
 
       if (dayEvents.length > 0) {
         return (
@@ -230,9 +203,16 @@ const CalendarComponent = () => {
 
   const tileClassName = ({ date, view }: { date: Date; view: string }) => {
     if (view === 'month') {
-      const hasEvent = myEvents.some(
-        (event) => event.startDate.toDateString() === date.toDateString(),
-      );
+      const hasEvent = myEvents.some((event) => {
+        const eventDate = new Date(event.startDate);
+        const clickedDate = new Date(date);
+        
+        return (
+          eventDate.getFullYear() === clickedDate.getFullYear() &&
+          eventDate.getMonth() === clickedDate.getMonth() &&
+          eventDate.getDate() === clickedDate.getDate()
+        );
+      });
 
       return `relative ${hasEvent ? 'event-day' : ''}`;
     }
@@ -280,15 +260,15 @@ const CalendarComponent = () => {
 
       {isModalOpen && (
         <EventModal
-          isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
+          isOpen={isModalOpen}
           teams={teams}
-          selectedDate={selectedDate}
           onSave={handleEventSave}
+          selectedDate={selectedDate}
         />
       )}
 
-      {selectedEvent && (
+      {isDetailsModalOpen && selectedEvent && (
         <EventDetailsModal
           isOpen={isDetailsModalOpen}
           onClose={() => setIsDetailsModalOpen(false)}

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import Logo from '../../images/logo/aeco.svg';
+import Logo from '../../../public/trace.svg';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faArrowLeft,
@@ -73,12 +73,9 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
       }`}
     >
       {/* <!-- SIDEBAR HEADER --> */}
-      <div className="flex items-center justify-between gap-2 px-6 py-5.5 lg:py-6.5">
+      <div className="flex items-center justify-between gap-2 px-6 pt-5">
         <NavLink to="/" className="flex items-center gap-2">
-          <img src={Logo} alt="AECO Logo" className="w-16" />
-          <span className="text-lg font-bold text-white dark:text-white whitespace-nowrap">
-            Arab Emergency
-          </span>
+          <img src={Logo} alt="Trace Logo" width={154} height={32} />
         </NavLink>
 
         <button

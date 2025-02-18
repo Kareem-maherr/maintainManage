@@ -5,12 +5,11 @@ import { db } from '../../config/firebase';
 
 interface UserStats {
   uid: string;
-  email: string;
-  displayName: string | null;
-  photoURL: string | null;
-  ticketCount: number;
-  lastLogin: Date | null;
   company: string;
+  contactName: string;
+  email: string;
+  phoneNumber: string;
+  ticketCount: number;
 }
 
 const UsersList = () => {
@@ -20,45 +19,42 @@ const UsersList = () => {
   useEffect(() => {
     const fetchUsersAndTickets = async () => {
       try {
-        // Get all tickets to count per user
+        // Get all tickets to count per company
         const ticketsRef = collection(db, 'tickets');
         const ticketsSnapshot = await getDocs(ticketsRef);
         const ticketCounts: { [key: string]: number } = {};
 
         ticketsSnapshot.forEach((doc) => {
           const data = doc.data();
-          if (data.createdBy) {
-            ticketCounts[data.createdBy] =
-              (ticketCounts[data.createdBy] || 0) + 1;
+          if (data.company) {
+            ticketCounts[data.company] = (ticketCounts[data.company] || 0) + 1;
           }
         });
 
-        // Get all users from the users collection
+        // Get all users from the users collection who are clients
         const usersRef = collection(db, 'users');
-        const usersSnapshot = await getDocs(usersRef);
+        const clientsQuery = query(usersRef, where('role', '==', 'client'));
+        const usersSnapshot = await getDocs(clientsQuery);
 
         const userData: UserStats[] = usersSnapshot.docs.map((doc) => {
           const data = doc.data();
           return {
             uid: doc.id,
+            company: data.company || 'N/A',
+            contactName: data.name || 'N/A',
             email: data.email || 'N/A',
-            displayName: data.displayName || 'Anonymous User',
-            photoURL: data.photoURL || null,
-            ticketCount: ticketCounts[doc.id] || 0,
-            lastLogin: data.lastLogin
-              ? new Date(data.lastLogin.toDate())
-              : null,
-            company: data.company || 'Not Assigned',
+            phoneNumber: data.phoneNumber || 'N/A',
+            ticketCount: ticketCounts[data.company] || 0
           };
         });
 
-        // Sort users by ticket count (highest first)
-        userData.sort((a, b) => b.ticketCount - a.ticketCount);
+        // Sort users by company name
+        userData.sort((a, b) => a.company.localeCompare(b.company));
 
         setUsers(userData);
         setLoading(false);
       } catch (error) {
-        console.error('Error fetching users and tickets:', error);
+        console.error('Error fetching clients and tickets:', error);
         setLoading(false);
       }
     };
@@ -80,56 +76,47 @@ const UsersList = () => {
     <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
       <div className="py-6 px-4 md:px-6 xl:px-7.5">
         <h4 className="text-xl font-semibold text-black dark:text-white">
-          System Users
+          Client List
         </h4>
       </div>
 
-      <div className="grid grid-cols-7 border-t border-stroke py-4.5 px-4 dark:border-strokedark sm:grid-cols-8 md:px-6 2xl:px-7.5">
+      <div className="grid grid-cols-12 border-t border-stroke py-4.5 px-4 dark:border-strokedark md:px-6 2xl:px-7.5">
         <div className="col-span-3 flex items-center">
-          <p className="font-medium">User</p>
-        </div>
-        <div className="col-span-2 hidden items-center sm:flex">
-          <p className="font-medium">Company</p>
-        </div>
-        <div className="col-span-1 flex items-center">
-          <p className="font-medium">Tickets</p>
+          <p className="font-medium font-semibold">Company</p>
         </div>
         <div className="col-span-2 flex items-center">
-          <p className="font-medium">Last Login</p>
+          <p className="font-medium font-semibold">Contact Name</p>
+        </div>
+        <div className="col-span-3 flex items-center">
+          <p className="font-medium font-semibold">Email</p>
+        </div>
+        <div className="col-span-2 flex items-center">
+          <p className="font-medium font-semibold">Phone Number</p>
+        </div>
+        <div className="col-span-2 flex items-center">
+          <p className="font-medium font-semibold">Tickets Created</p>
         </div>
       </div>
 
-      {users.map((user, key) => (
+      {users.map((user) => (
         <div
-          className="grid grid-cols-7 border-t border-stroke py-4.5 px-4 dark:border-strokedark sm:grid-cols-8 md:px-6 2xl:px-7.5"
+          className="grid grid-cols-12 border-t border-stroke py-4.5 px-4 dark:border-strokedark md:px-6 2xl:px-7.5"
           key={user.uid}
         >
           <div className="col-span-3 flex items-center">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <div className="h-12.5 w-12.5 rounded-full">
-                {user.photoURL ? (
-                  <img src={user.photoURL} alt="User" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center rounded-full bg-meta-2 dark:bg-meta-4">
-                    {user.displayName?.charAt(0).toUpperCase() || 'A'}
-                  </div>
-                )}
-              </div>
-              <p className="text-sm text-black dark:text-white">
-                {user.displayName}
-              </p>
-            </div>
-          </div>
-          <div className="col-span-2 hidden items-center sm:flex">
             <p className="text-sm text-black dark:text-white">{user.company}</p>
           </div>
-          <div className="col-span-1 flex items-center">
-            <p className="text-sm text-meta-3">{user.ticketCount}</p>
+          <div className="col-span-2 flex items-center">
+            <p className="text-sm text-black dark:text-white">{user.contactName}</p>
+          </div>
+          <div className="col-span-3 flex items-center">
+            <p className="text-sm text-black dark:text-white">{user.email}</p>
           </div>
           <div className="col-span-2 flex items-center">
-            <p className="text-sm text-black dark:text-white">
-              {user.lastLogin ? user.lastLogin.toLocaleDateString() : 'Never'}
-            </p>
+            <p className="text-sm text-black dark:text-white">{user.phoneNumber}</p>
+          </div>
+          <div className="col-span-2 flex items-center">
+            <p className="text-sm text-meta-3">{user.ticketCount}</p>
           </div>
         </div>
       ))}

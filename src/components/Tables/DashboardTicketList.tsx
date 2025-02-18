@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, where, Timestamp, orderBy, limit } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, Timestamp, orderBy, limit, getDoc, doc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { db } from '../../config/firebase';
+import { NavLink } from 'react-router-dom';
 
 interface Ticket {
   id: string;
@@ -16,6 +17,7 @@ interface Ticket {
   notes: string;
   createdAt: Timestamp;
   hasUnreadMessages: boolean;
+  responsible_engineer?: string;
 }
 
 const priorityStyles: { [key: string]: string } = {
@@ -38,57 +40,88 @@ interface TableOneProps {
 const DashboardTicketList = ({ onViewMore }: TableOneProps) => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [userCompanies, setUserCompanies] = useState<{ [key: string]: string }>({});
+  const [isEngineer, setIsEngineer] = useState(false);
   const auth = getAuth();
 
   useEffect(() => {
-    const fetchUserCompany = async (email: string) => {
+    const fetchUserRoleAndTickets = async () => {
       try {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('email', '==', email));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-          if (!snapshot.empty) {
-            const userData = snapshot.docs[0].data();
-            setUserCompanies(prev => ({
-              ...prev,
-              [email]: userData.company || 'N/A'
-            }));
-          }
-        });
-        return unsubscribe;
-      } catch (error) {
-        console.error('Error fetching user company:', error);
-        return () => {};
-      }
-    };
+        const currentUser = auth.currentUser;
+        if (!currentUser) return;
 
-    const unsubscribeTickets = onSnapshot(
-      query(
-        collection(db, 'tickets'),
-        where('status', '==', 'Open'),
-        orderBy('createdAt', 'desc'),
-        limit(5)
-      ), 
-      (snapshot) => {
-        const ticketData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }) as Ticket);
-        setTickets(ticketData);
+        // Get user document
+        const userDoc = await getDoc(doc(db, 'engineers', currentUser.uid));
+        const userData = userDoc.data();
         
-        // Fetch company information for each unique sender
-        const uniqueSenders = [...new Set(ticketData.map(ticket => ticket.sender))];
-        uniqueSenders.forEach(sender => {
-          if (sender && !userCompanies[sender]) {
-            fetchUserCompany(sender);
-          }
-        });
-      }
-    );
+        // Check if user is admin
+        const isAdmin = currentUser.email === 'admin@arabemergency.com';
+        
+        // Check if user is a responsible engineer
+        const isEngineer = userData?.role === 'engineer' && !isAdmin;
+        setIsEngineer(isEngineer);
 
-    return () => {
-      unsubscribeTickets();
+        // Base query parameters
+        const queryParams = [
+          where('status', '==', 'Open'),
+          orderBy('createdAt', 'desc'),
+          limit(5)
+        ];
+
+        // If engineer (and not admin), only show their tickets
+        if (isEngineer) {
+          queryParams.unshift(where('responsible_engineer', '==', currentUser.email));
+        }
+
+        // Create and execute query
+        const unsubscribeTickets = onSnapshot(
+          query(collection(db, 'tickets'), ...queryParams),
+          (snapshot) => {
+            const ticketData = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }) as Ticket);
+            setTickets(ticketData);
+
+            // Fetch company information for each unique sender
+            const uniqueSenders = [...new Set(ticketData.map(ticket => ticket.sender))];
+            uniqueSenders.forEach(sender => {
+              if (sender && !userCompanies[sender]) {
+                fetchUserCompany(sender);
+              }
+            });
+          }
+        );
+
+        return () => {
+          unsubscribeTickets();
+        };
+      } catch (error) {
+        console.error('Error fetching user role and tickets:', error);
+      }
     };
+
+    fetchUserRoleAndTickets();
   }, []);
+
+  const fetchUserCompany = async (email: string) => {
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', email));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        if (!snapshot.empty) {
+          const userData = snapshot.docs[0].data();
+          setUserCompanies(prev => ({
+            ...prev,
+            [email]: userData.company || 'N/A'
+          }));
+        }
+      });
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error fetching user company:', error);
+      return () => {};
+    }
+  };
 
   return (
     <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
@@ -96,12 +129,14 @@ const DashboardTicketList = ({ onViewMore }: TableOneProps) => {
         <h4 className="text-xl font-semibold text-black dark:text-white">
           Recent Open Tickets
         </h4>
+        <NavLink to="/tables">
         <button
           onClick={onViewMore}
           className="inline-flex items-center justify-center rounded-md border border-primary py-2 px-6 text-center font-medium text-primary hover:bg-opacity-90"
         >
           View More
         </button>
+        </NavLink>
       </div>
 
       <div className="flex flex-col">

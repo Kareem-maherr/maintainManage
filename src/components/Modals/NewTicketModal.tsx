@@ -21,6 +21,10 @@ interface TicketFormData {
   notes: string;
   createdAt: any;
   responsibleEngineer: string;
+  projectNumber: string;
+  contactNumber: string;
+  branch: string;
+  attachments: File[];
 }
 
 const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
@@ -36,7 +40,11 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
     ticketDetails: '',
     notes: '',
     createdAt: null,
-    responsibleEngineer: ''
+    responsibleEngineer: '',
+    projectNumber: '',
+    contactNumber: '',
+    branch: '',
+    attachments: []
   });
 
   const [submitting, setSubmitting] = useState(false);
@@ -89,6 +97,9 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
         status: 'Open',
         createdAt: serverTimestamp(),
         createdBy: user.uid,
+        projectNumber: ticketData.projectNumber,
+        contactNumber: ticketData.contactNumber,
+        branch: ticketData.branch,
         responsible_engineer: ticketData.responsibleEngineer ? responsibleEngineers.find(eng => eng.email === ticketData.responsibleEngineer)?.email : ''
       };
 
@@ -102,6 +113,23 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const fileList = Array.from(e.target.files);
+      setTicketData(prev => ({
+        ...prev,
+        attachments: [...prev.attachments, ...fileList]
+      }));
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setTicketData(prev => ({
+      ...prev,
+      attachments: prev.attachments.filter((_, i) => i !== index)
+    }));
   };
 
   return (
@@ -206,6 +234,46 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-2.5 block text-black dark:text-white">
+                Project Number
+              </label>
+              <input
+                type="text"
+                value={ticketData.projectNumber}
+                onChange={(e) => setTicketData({ ...ticketData, projectNumber: e.target.value })}
+                className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-2.5 block text-black dark:text-white">
+                Contact Number
+              </label>
+              <input
+                type="tel"
+                value={ticketData.contactNumber}
+                onChange={(e) => setTicketData({ ...ticketData, contactNumber: e.target.value })}
+                className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-2.5 block text-black dark:text-white">
+              Branch
+            </label>
+            <input
+              type="text"
+              value={ticketData.branch}
+              onChange={(e) => setTicketData({ ...ticketData, branch: e.target.value })}
+              className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
+              required
+            />
+          </div>
+
           <div>
             <label className="mb-2.5 block text-black dark:text-white">
               Severity
@@ -257,6 +325,38 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
               rows={4}
               required
             />
+          </div>
+
+          <div>
+            <label className="mb-2.5 block text-black dark:text-white">
+              Attachments
+            </label>
+            <div className="flex flex-col gap-3">
+              <input
+                type="file"
+                onChange={handleFileChange}
+                multiple
+                className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
+              />
+              {ticketData.attachments.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  {ticketData.attachments.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between bg-gray-100 dark:bg-meta-4 p-2 rounded">
+                      <span className="text-sm truncate">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(index)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex justify-end space-x-4">
