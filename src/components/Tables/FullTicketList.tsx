@@ -1,5 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, where, Timestamp, orderBy, Query, getDoc, doc, getDocs, limit } from 'firebase/firestore';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  collection,
+  onSnapshot,
+  query,
+  where,
+  Timestamp,
+  orderBy,
+  Query,
+  getDoc,
+  doc,
+  getDocs,
+  limit,
+} from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { getAuth } from 'firebase/auth';
 import TicketDetailsModal from '../Modals/TicketDetailsModal';
@@ -39,11 +51,13 @@ const FullTicketList = () => {
     company: '',
     severity: '',
     status: '',
-    location: ''
+    location: '',
   });
   const [companies, setCompanies] = useState<string[]>([]);
   const [locations, setLocations] = useState<string[]>([]);
   const [isResponsibleEngineer, setIsResponsibleEngineer] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const auth = getAuth();
 
   const severityOptions = ['All', 'Critical', 'High', 'Medium', 'Low'];
@@ -51,82 +65,114 @@ const FullTicketList = () => {
 
   useEffect(() => {
     const fetchUserRoleAndTickets = async () => {
+      if (!auth.currentUser) return;
+
       try {
         const currentUser = auth.currentUser;
-        if (!currentUser) return;
+        setUserEmail(currentUser.email);
 
-        console.log('Current user email:', currentUser.email);
-
-        // Check if user is admin
-        const isAdmin = currentUser.email === 'admin@arabemergency.com';
-        
-        // Get user document
+        // Get user document to check role
         const userDoc = await getDoc(doc(db, 'engineers', currentUser.uid));
         const userData = userDoc.data();
-        console.log('Engineer data in FullTicketList:', userData);
-        
-        // Check if user is a responsible engineer based on their role field
-        const isEngineer = userData?.role === 'engineer';
-        
-        setIsResponsibleEngineer(isEngineer);
-        console.log('Is engineer:', isEngineer);
-        console.log('Is admin:', isAdmin);
+        const isUserEngineer = userData?.role === 'engineer';
+        setIsResponsibleEngineer(isUserEngineer);
 
-        // Base query
-        let ticketsQuery = query(collection(db, 'tickets'), orderBy('createdAt', 'desc'));
+        // Set admin status based on role in engineers collection
+        const isAdmin = userData?.role === 'admin';
+        setIsAdmin(isAdmin);
 
-        // If responsible engineer (and not admin), only show their tickets
-        if (isEngineer && !isAdmin) {
-          console.log('Filtering tickets for engineer:', currentUser.email);
+        // Build query based on user role
+        let ticketsQuery;
+        if (isAdmin) {
+          // Admin sees all tickets
+          ticketsQuery = query(
+            collection(db, 'tickets'),
+            orderBy('createdAt', 'desc'),
+          );
+        } else if (isUserEngineer && currentUser.email) {
+          // Engineer sees only their tickets
           ticketsQuery = query(
             collection(db, 'tickets'),
             where('responsible_engineer', '==', currentUser.email),
-            orderBy('createdAt', 'desc')
+            orderBy('createdAt', 'desc'),
           );
+        } else {
+          // Non-admin, non-engineer users should see no tickets
+          setTickets([]);
+          setLoading(false);
+          return;
         }
 
         // Apply filters
         if (filters.startDate) {
-          const startTimestamp = Timestamp.fromDate(new Date(filters.startDate));
-          ticketsQuery = query(ticketsQuery, where('createdAt', '>=', startTimestamp));
+          const startTimestamp = Timestamp.fromDate(
+            new Date(filters.startDate),
+          );
+          ticketsQuery = query(
+            ticketsQuery,
+            where('createdAt', '>=', startTimestamp),
+          );
         }
-        
+
         if (filters.endDate) {
-          const endTimestamp = Timestamp.fromDate(new Date(filters.endDate + 'T23:59:59'));
-          ticketsQuery = query(ticketsQuery, where('createdAt', '<=', endTimestamp));
+          const endTimestamp = Timestamp.fromDate(
+            new Date(filters.endDate + 'T23:59:59'),
+          );
+          ticketsQuery = query(
+            ticketsQuery,
+            where('createdAt', '<=', endTimestamp),
+          );
         }
-        
+
         if (filters.company && filters.company !== 'All') {
-          ticketsQuery = query(ticketsQuery, where('company', '==', filters.company));
+          ticketsQuery = query(
+            ticketsQuery,
+            where('company', '==', filters.company),
+          );
         }
-        
+
         if (filters.severity && filters.severity !== 'All') {
-          ticketsQuery = query(ticketsQuery, where('severity', '==', filters.severity));
+          ticketsQuery = query(
+            ticketsQuery,
+            where('severity', '==', filters.severity),
+          );
         }
-        
+
         if (filters.status && filters.status !== 'All') {
-          ticketsQuery = query(ticketsQuery, where('status', '==', filters.status));
+          ticketsQuery = query(
+            ticketsQuery,
+            where('status', '==', filters.status),
+          );
         }
-        
+
         if (filters.location && filters.location !== 'All') {
-          ticketsQuery = query(ticketsQuery, where('location', '==', filters.location));
+          ticketsQuery = query(
+            ticketsQuery,
+            where('location', '==', filters.location),
+          );
         }
 
         const unsubscribe = onSnapshot(ticketsQuery, async (snapshot) => {
           const ticketsData: FullTicket[] = [];
-          
+
           for (const doc of snapshot.docs) {
             const ticketData = doc.data();
-            
+
             // Check for unread messages
             const messagesRef = collection(db, 'tickets', doc.id, 'messages');
-            const lastMessageQuery = query(messagesRef, orderBy('timestamp', 'desc'), limit(1));
+            const lastMessageQuery = query(
+              messagesRef,
+              orderBy('timestamp', 'desc'),
+              limit(1),
+            );
             const lastMessageSnap = await getDocs(lastMessageQuery);
-            
-            const hasUnreadMessages = !lastMessageSnap.empty && 
-              lastMessageSnap.docs[0].data().sender !== currentUser.email && 
-              (!ticketData.lastReadTimestamp || 
-               lastMessageSnap.docs[0].data().timestamp > ticketData.lastReadTimestamp);
+
+            const hasUnreadMessages =
+              !lastMessageSnap.empty &&
+              lastMessageSnap.docs[0].data().sender !== currentUser.email &&
+              (!ticketData.lastReadTimestamp ||
+                lastMessageSnap.docs[0].data().timestamp >
+                  ticketData.lastReadTimestamp);
 
             ticketsData.push({
               id: doc.id,
@@ -137,16 +183,20 @@ const FullTicketList = () => {
               severity: ticketData.severity,
               status: ticketData.status,
               responsible_engineer: ticketData.responsible_engineer,
-              hasUnreadMessages
+              hasUnreadMessages,
             });
           }
-          
+
           // Update unique companies and locations for filters
-          const uniqueCompanies = [...new Set(ticketsData.map(ticket => ticket.company))];
-          const uniqueLocations = [...new Set(ticketsData.map(ticket => ticket.location))];
+          const uniqueCompanies = [
+            ...new Set(ticketsData.map((ticket) => ticket.company)),
+          ];
+          const uniqueLocations = [
+            ...new Set(ticketsData.map((ticket) => ticket.location)),
+          ];
           setCompanies(['All', ...uniqueCompanies]);
           setLocations(['All', ...uniqueLocations]);
-          
+
           setTickets(ticketsData);
           setLoading(false);
         });
@@ -161,11 +211,13 @@ const FullTicketList = () => {
     fetchUserRoleAndTickets();
   }, [filters, auth.currentUser]);
 
-  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleFilterChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
     const { name, value } = e.target;
-    setFilters(prev => ({
+    setFilters((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
@@ -176,22 +228,22 @@ const FullTicketList = () => {
       company: '',
       severity: '',
       status: '',
-      location: ''
+      location: '',
     });
   };
 
   const getTimeElapsed = (createdAt: any) => {
     if (!createdAt) return 'N/A';
-    
+
     const now = new Date();
     const created = createdAt.toDate();
     const elapsed = now.getTime() - created.getTime();
-    
+
     const seconds = Math.floor(elapsed / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
-    
+
     if (days > 0) return `${days} day${days > 1 ? 's' : ''}`;
     if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''}`;
     if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''}`;
@@ -230,30 +282,34 @@ const FullTicketList = () => {
             Overview of all tickets and their status
           </p>
         </div>
-        <div className="flex gap-4">
-          <button
-            onClick={() => setShowNewTicketModal(true)}
-            className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
-          >
-            Create New Ticket
-          </button>
-          <button
-            onClick={() => setShowPDFModal(true)}
-            className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
-          >
-            Generate PDF
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="flex gap-4">
+            <button
+              onClick={() => setShowNewTicketModal(true)}
+              className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
+            >
+              Create New Ticket
+            </button>
+            <button
+              onClick={() => setShowPDFModal(true)}
+              className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
+            >
+              Generate PDF
+            </button>
+          </div>
+        )}
       </div>
 
       {showPDFModal && (
         <PDFGeneratorModal onClose={() => setShowPDFModal(false)} />
       )}
-      
+
       {/* Filter Controls */}
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-6">
         <div>
-          <label className="mb-2.5 block text-black dark:text-white">Start Date</label>
+          <label className="mb-2.5 block text-black dark:text-white">
+            Start Date
+          </label>
           <input
             type="date"
             name="startDate"
@@ -264,7 +320,9 @@ const FullTicketList = () => {
         </div>
 
         <div>
-          <label className="mb-2.5 block text-black dark:text-white">End Date</label>
+          <label className="mb-2.5 block text-black dark:text-white">
+            End Date
+          </label>
           <input
             type="date"
             name="endDate"
@@ -275,7 +333,9 @@ const FullTicketList = () => {
         </div>
 
         <div>
-          <label className="mb-2.5 block text-black dark:text-white">Company</label>
+          <label className="mb-2.5 block text-black dark:text-white">
+            Company
+          </label>
           <select
             name="company"
             value={filters.company}
@@ -283,13 +343,17 @@ const FullTicketList = () => {
             className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
           >
             {companies.map((company, index) => (
-              <option key={company || `company-${index}`} value={company}>{company}</option>
+              <option key={company || `company-${index}`} value={company}>
+                {company}
+              </option>
             ))}
           </select>
         </div>
 
         <div>
-          <label className="mb-2.5 block text-black dark:text-white">Severity</label>
+          <label className="mb-2.5 block text-black dark:text-white">
+            Severity
+          </label>
           <select
             name="severity"
             value={filters.severity}
@@ -297,13 +361,17 @@ const FullTicketList = () => {
             className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
           >
             {severityOptions.map((severity, index) => (
-              <option key={severity || `severity-${index}`} value={severity}>{severity}</option>
+              <option key={severity || `severity-${index}`} value={severity}>
+                {severity}
+              </option>
             ))}
           </select>
         </div>
 
         <div>
-          <label className="mb-2.5 block text-black dark:text-white">Status</label>
+          <label className="mb-2.5 block text-black dark:text-white">
+            Status
+          </label>
           <select
             name="status"
             value={filters.status}
@@ -311,13 +379,17 @@ const FullTicketList = () => {
             className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
           >
             {statusOptions.map((status, index) => (
-              <option key={status || `status-${index}`} value={status}>{status}</option>
+              <option key={status || `status-${index}`} value={status}>
+                {status}
+              </option>
             ))}
           </select>
         </div>
 
         <div>
-          <label className="mb-2.5 block text-black dark:text-white">Location</label>
+          <label className="mb-2.5 block text-black dark:text-white">
+            Location
+          </label>
           <select
             name="location"
             value={filters.location}
@@ -325,7 +397,9 @@ const FullTicketList = () => {
             className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
           >
             {locations.map((location, index) => (
-              <option key={location || `location-${index}`} value={location}>{location}</option>
+              <option key={location || `location-${index}`} value={location}>
+                {location}
+              </option>
             ))}
           </select>
         </div>
@@ -375,7 +449,11 @@ const FullTicketList = () => {
           </thead>
           <tbody>
             {tickets.map((ticket, key) => (
-              <tr key={ticket.id} onClick={() => setSelectedTicket(ticket)} className="cursor-pointer hover:bg-gray-1 dark:hover:bg-meta-4">
+              <tr
+                key={ticket.id}
+                onClick={() => setSelectedTicket(ticket)}
+                className="cursor-pointer hover:bg-gray-1 dark:hover:bg-meta-4"
+              >
                 <td className="border-b border-[#eee] py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
                   <h5 className="font-medium text-black dark:text-white">
                     {ticket.title}
@@ -388,7 +466,9 @@ const FullTicketList = () => {
                   <p className="text-black dark:text-white">{ticket.company}</p>
                 </td>
                 <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
-                  <p className="text-black dark:text-white">{ticket.location}</p>
+                  <p className="text-black dark:text-white">
+                    {ticket.location}
+                  </p>
                 </td>
                 <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
                   <p className="text-black dark:text-white">
@@ -401,12 +481,20 @@ const FullTicketList = () => {
                   </p>
                 </td>
                 <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
-                  <p className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${getSeverityColor(ticket.severity)}`}>
+                  <p
+                    className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${getSeverityColor(
+                      ticket.severity,
+                    )}`}
+                  >
                     {ticket.severity}
                   </p>
                 </td>
                 <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
-                  <p className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${getStatusColor(ticket.status)}`}>
+                  <p
+                    className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${getStatusColor(
+                      ticket.status,
+                    )}`}
+                  >
                     {ticket.status}
                   </p>
                 </td>

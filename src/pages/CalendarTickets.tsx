@@ -53,33 +53,41 @@ const CalendarTickets = () => {
         setUserEmail(currentUser.email);
         console.log('Current user email:', currentUser.email);
 
-        // Check if user is admin
-        const isAdmin = currentUser.email === 'admin@arabemergency.com';
-        console.log('Is admin:', isAdmin);
-        
         // Get user document to check role
         const userDoc = await getDoc(doc(db, 'engineers', currentUser.uid));
         const userData = userDoc.data();
+        
+        // Check roles
+        const isAdmin = userData?.role === 'admin';
         const isUserEngineer = userData?.role === 'engineer';
+        
         console.log('User data:', userData);
+        console.log('Is admin:', isAdmin);
         console.log('Is engineer:', isUserEngineer);
         setIsEngineer(isUserEngineer);
 
         // Build query based on user role
         let eventsQuery;
-        if (isUserEngineer && !isAdmin && currentUser.email) {
-          eventsQuery = query(
-            collection(db, 'events'),
-            where('responsibleEngineer', '==', currentUser.email),
-            orderBy('startDate', 'desc')
-          );
-          console.log('Filtering events for engineer:', currentUser.email);
+        if (!isAdmin) {
+          if (isUserEngineer && currentUser.email) {
+            eventsQuery = query(
+              collection(db, 'events'),
+              where('responsibleEngineer', '==', currentUser.email),
+              orderBy('startDate', 'desc')
+            );
+            console.log('Filtering events for engineer:', currentUser.email);
+          } else {
+            // Non-admin, non-engineer users should see no events
+            setEvents([]);
+            setLoading(false);
+            return;
+          }
         } else {
           eventsQuery = query(
             collection(db, 'events'),
             orderBy('startDate', 'desc')
           );
-          console.log('Showing all events');
+          console.log('Showing all events (admin)');
         }
 
         const eventsSnapshot = await getDocs(eventsQuery);

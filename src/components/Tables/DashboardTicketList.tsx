@@ -52,13 +52,13 @@ const DashboardTicketList = ({ onViewMore }: TableOneProps) => {
         // Get user document
         const userDoc = await getDoc(doc(db, 'engineers', currentUser.uid));
         const userData = userDoc.data();
-        
-        // Check if user is admin
-        const isAdmin = currentUser.email === 'admin@arabemergency.com';
-        
+
+        // Check if user is admin based on role
+        const isAdmin = userData?.role === 'admin';
+
         // Check if user is a responsible engineer
-        const isEngineer = userData?.role === 'engineer' && !isAdmin;
-        setIsEngineer(isEngineer);
+        const isEngineer = userData?.role === 'engineer';
+        setIsEngineer(isEngineer && !isAdmin);
 
         // Base query parameters
         const queryParams = [
@@ -68,7 +68,7 @@ const DashboardTicketList = ({ onViewMore }: TableOneProps) => {
         ];
 
         // If engineer (and not admin), only show their tickets
-        if (isEngineer) {
+        if (isEngineer && !isAdmin) {
           queryParams.unshift(where('responsible_engineer', '==', currentUser.email));
         }
 

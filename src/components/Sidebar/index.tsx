@@ -12,6 +12,9 @@ import {
   faUser,
   faUsersGear,
 } from '@fortawesome/free-solid-svg-icons';
+import { useAuth } from '../../contexts/AuthContext';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
 interface SidebarProps {
   sidebarOpen: boolean;
@@ -21,6 +24,8 @@ interface SidebarProps {
 const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
   const location = useLocation();
   const { pathname } = location;
+  const { currentUser } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const trigger = useRef<any>(null);
   const sidebar = useRef<any>(null);
@@ -29,6 +34,16 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
   const [sidebarExpanded, setSidebarExpanded] = useState(
     storedSidebarExpanded === null ? false : storedSidebarExpanded === 'true',
   );
+
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (currentUser?.uid) {
+        const engineerDoc = await getDoc(doc(db, 'engineers', currentUser.uid));
+        setIsAdmin(engineerDoc.data()?.role === 'admin');
+      }
+    };
+    checkAdminStatus();
+  }, [currentUser]);
 
   // close on click outside
   useEffect(() => {
@@ -166,32 +181,36 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                 </NavLink>
               </li>
 
-              <li className="my-3 h-px bg-gray-700"></li>
+              {isAdmin && (
+                <>
+                  <li className="my-3 h-px bg-gray-700"></li>
 
-              <li>
-                <NavLink
-                  to="/teams"
-                  className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
-                    pathname.includes('teams') && 'bg-graydark dark:bg-meta-4'
-                  }`}
-                >
-                  <FontAwesomeIcon icon={faUsers} className="h-5 w-5" />
-                  Teams
-                </NavLink>
-              </li>
+                  <li>
+                    <NavLink
+                      to="/teams"
+                      className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
+                        pathname.includes('teams') && 'bg-graydark dark:bg-meta-4'
+                      }`}
+                    >
+                      <FontAwesomeIcon icon={faUsers} className="h-5 w-5" />
+                      Teams
+                    </NavLink>
+                  </li>
 
-              <li>
-                <NavLink
-                  to="/engineers"
-                  className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
-                    pathname.includes('engineers') &&
-                    'bg-graydark dark:bg-meta-4'
-                  }`}
-                >
-                  <FontAwesomeIcon icon={faUsersGear} className="h-5 w-5" />
-                  Engineers
-                </NavLink>
-              </li>
+                  <li>
+                    <NavLink
+                      to="/engineers"
+                      className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
+                        pathname.includes('engineers') &&
+                        'bg-graydark dark:bg-meta-4'
+                      }`}
+                    >
+                      <FontAwesomeIcon icon={faUsersGear} className="h-5 w-5" />
+                      Engineers
+                    </NavLink>
+                  </li>
+                </>
+              )}
             </ul>
           </div>
         </nav>

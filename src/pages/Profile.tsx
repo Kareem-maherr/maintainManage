@@ -1,5 +1,5 @@
 import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
-import UsersList from '../components/Tables/TableTwo';
+import ClientList from '../components/Cards/ClientList';
 
 const Profile = () => {
   return (
@@ -8,7 +8,7 @@ const Profile = () => {
 
       <div className="flex flex-col gap-10">
       
-        <UsersList />
+        <ClientList />
       </div>
     </>
   );

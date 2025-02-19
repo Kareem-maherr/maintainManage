@@ -147,183 +147,249 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
   };
 
   return (
-    <div className="fixed inset-0 z-999999 flex items-center justify-center overflow-y-auto bg-black bg-opacity-40">
-      <div className="relative w-full max-w-xl rounded-lg bg-white p-8 shadow-lg dark:bg-boxdark">
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 text-gray-500 hover:text-gray-700"
-        >
-          <svg
-            className="h-6 w-6"
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path d="M6 18L18 6M6 6l12 12"></path>
-          </svg>
-        </button>
-
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-black dark:text-white">
-            {isEditing ? (
-              <input
-                type="text"
-                value={editedTicket.title}
-                onChange={(e) =>
-                  setEditedTicket({ ...editedTicket, title: e.target.value })
-                }
-                className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
-              />
-            ) : (
-              ticket.title
-            )}
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Company</p>
-            <p className="font-medium text-black dark:text-white">
-              {ticket.company}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Location</p>
-            <p className="font-medium text-black dark:text-white">
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full backdrop-blur-sm transition-opacity flex items-center justify-center">
+      <div className="relative mx-auto p-6 border w-[800px] shadow-xl rounded-xl bg-white transition-all transform">
+        <div className="flex justify-between items-start mb-6">
+          <div className="flex-1">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-2">
               {isEditing ? (
                 <input
                   type="text"
-                  value={editedTicket.location}
+                  value={editedTicket.title}
                   onChange={(e) =>
-                    setEditedTicket({ ...editedTicket, location: e.target.value })
+                    setEditedTicket({ ...editedTicket, title: e.target.value })
                   }
-                  className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
+                  className="w-full rounded-lg border-[1.5px] border-stroke bg-transparent py-2 px-4 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
                 />
               ) : (
-                localTicket.location
+                <span className="hover:text-primary transition-colors">{ticket.title}</span>
               )}
-            </p>
+            </h2>
+            <p className="text-sm text-gray-500">Ticket ID: #{ticket.id}</p>
           </div>
-          <div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Severity</p>
-            <p className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${severityStyles[localTicket.severity as keyof typeof severityStyles]}`}>
-              {isEditing ? (
-                <select
-                  value={editedTicket.severity}
-                  onChange={(e) => handlePriorityChange(e.target.value)}
-                  className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
-                >
-                  <option value="Critical">Critical</option>
-                  <option value="High">High</option>
-                  <option value="Medium">Medium</option>
-                  <option value="Low">Low</option>
-                </select>
-              ) : (
-                localTicket.severity
-              )}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Status</p>
-            <p className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${statusStyles[localTicket.status as keyof typeof statusStyles]}`}>
-              {isEditing ? (
-                <select
-                  value={editedTicket.status}
-                  onChange={(e) => handleStatusChange(e.target.value)}
-                  className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
-                >
-                  <option value="Open">Open</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Resolved">Resolved</option>
-                </select>
-              ) : (
-                localTicket.status
-              )}
-            </p>
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <h3 className="mb-2 text-lg font-semibold text-black dark:text-white">
-            Messages
-          </h3>
-          <div className="max-h-60 overflow-y-auto rounded border border-stroke p-4 dark:border-strokedark">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`mb-4 rounded-lg p-3 ${
-                  message.isAdmin
-                    ? "bg-primary bg-opacity-10 ml-auto"
-                    : "bg-gray-100 dark:bg-meta-4"
-                }`}
-              >
-                <p className="text-sm font-medium text-black dark:text-white">
-                  {message.sender}
-                </p>
-                <p className="text-gray-600 dark:text-gray-400">
-                  {message.content}
-                </p>
-                <p className="text-xs text-gray-400">
-                  {message.timestamp?.toDate().toLocaleString()}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <form onSubmit={handleSendMessage} className="mb-6">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Type your message..."
-              className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
-            />
-            <button
-              type="submit"
-              className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-full transition-colors"
+          >
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
             >
-              Send
-            </button>
-          </div>
-        </form>
+              <path d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
 
-        <div className="flex justify-between">
+        {/* Status and Severity */}
+        <div className="flex items-center space-x-4 mb-6">
           {isEditing ? (
             <>
+              <select
+                value={editedTicket.severity}
+                onChange={(e) => handlePriorityChange(e.target.value)}
+                className="px-4 py-2 text-sm font-semibold rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+              >
+                <option value="Critical">Critical</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+              <select
+                value={editedTicket.status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                className="px-4 py-2 text-sm font-semibold rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+              >
+                <option value="Open">Open</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Resolved">Resolved</option>
+              </select>
+            </>
+          ) : (
+            <>
+              <span
+                className={`px-4 py-2 text-sm font-semibold rounded-lg ${
+                  severityStyles[localTicket.severity as keyof typeof severityStyles]
+                } cursor-pointer hover:opacity-80 transition-opacity`}
+                onClick={() => setIsEditing(true)}
+              >
+                {localTicket.severity}
+              </span>
+              <span
+                className={`px-4 py-2 text-sm font-semibold rounded-lg ${
+                  statusStyles[localTicket.status as keyof typeof statusStyles]
+                } cursor-pointer hover:opacity-80 transition-opacity`}
+                onClick={() => setIsEditing(true)}
+              >
+                {localTicket.status}
+              </span>
+            </>
+          )}
+          {isEditing ? (
+            <div className="flex space-x-2 ml-auto">
               <button
-                onClick={() => setIsEditing(false)}
-                className="inline-flex items-center justify-center rounded-md border border-primary bg-white px-6 py-2 text-center font-medium text-primary hover:bg-opacity-90 dark:border-primary dark:bg-primary dark:text-white"
+                onClick={handleUpdateTicket}
+                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-opacity-90 transition-colors"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setIsEditing(false);
+                  setEditedTicket(localTicket);
+                }}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
               >
                 Cancel
               </button>
-              <button
-                onClick={handleUpdateTicket}
-                className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
-              >
-                Save Changes
-              </button>
-            </>
-          ) : (
-            <div className="flex gap-4">
-              <button
-                onClick={() => setIsSetDateModalOpen(true)}
-                className="inline-flex items-center justify-center rounded-md border border-primary bg-primary px-6 py-2 text-center font-medium text-white hover:bg-opacity-90"
-              >
-                Set Date
-              </button>
-              <button
-                onClick={() => setIsEditing(true)}
-                className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
-              >
-                Edit Ticket
-              </button>
             </div>
+          ) : (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="ml-auto px-4 py-2 text-primary hover:bg-primary hover:text-white border border-primary rounded-lg transition-all"
+            >
+              Edit Ticket
+            </button>
           )}
+        </div>
+
+        <div className="grid grid-cols-3 gap-6">
+          {/* Left Column - Ticket Information */}
+          <div className="col-span-1">
+            <div className="bg-gray-50 p-4 rounded-lg mb-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4">
+                Ticket Information
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-center text-sm">
+                  <svg className="w-4 h-4 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span className="text-gray-900">{ticket.email}</span>
+                </div>
+                <div className="flex items-center text-sm">
+                  <svg className="w-4 h-4 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span className="text-gray-900">{localTicket.location}</span>
+                </div>
+                <div className="flex items-center text-sm">
+                  <svg className="w-4 h-4 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <span className="text-gray-900">{ticket.company}</span>
+                </div>
+                <div className="flex items-center text-sm">
+                  <svg className="w-4 h-4 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <span className="text-gray-900">{localTicket.projectNumber}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                Details
+              </h3>
+              {isEditing ? (
+                <textarea
+                  value={editedTicket.details || ''}
+                  onChange={(e) =>
+                    setEditedTicket({ ...editedTicket, details: e.target.value })
+                  }
+                  className="w-full rounded-lg border-[1.5px] border-stroke bg-transparent py-2 px-4 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input min-h-[100px]"
+                  placeholder="Enter ticket details..."
+                />
+              ) : (
+                <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                  {localTicket.ticketDetails || 'No details provided'}
+                </p>
+              )}
+            </div>
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                Notes
+              </h3>
+              {isEditing ? (
+                <textarea
+                  value={editedTicket.notes || ''}
+                  onChange={(e) =>
+                    setEditedTicket({ ...editedTicket, notes: e.target.value })
+                  }
+                  className="w-full rounded-lg border-[1.5px] border-stroke bg-transparent py-2 px-4 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input min-h-[100px]"
+                  placeholder="Enter ticket details..."
+                />
+              ) : (
+                <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                  {localTicket.notes || 'No Notes provided'}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column - Conversation */}
+          <div className="col-span-2 flex flex-col">
+            <div className="bg-gray-50 p-4 rounded-lg flex-1 mb-4 max-h-[400px] overflow-y-auto">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4">
+                Conversation
+              </h3>
+              <div className="space-y-4">
+                {messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex ${
+                      message.isAdmin ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-lg p-3 ${
+                        message.isAdmin
+                          ? "bg-blue-100 text-blue-900"
+                          : "bg-gray-100 text-gray-900"
+                      }`}
+                    >
+                      <div className="text-xs font-medium mb-1">
+                        {message.sender} •{" "}
+                        {message.timestamp?.toDate().toLocaleString()}
+                      </div>
+                      <div className="text-sm">{message.content}</div>
+                    </div>
+                  </div>
+                ))}
+                {messages.length === 0 && (
+                  <div className="text-center text-gray-500 text-sm">
+                    No messages yet. Start the conversation!
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Message Input */}
+            <form onSubmit={handleSendMessage} className="flex gap-2">
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Type your message..."
+                className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+                Send
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* Set Date Modal */}
