@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Calendar from 'react-calendar';
-import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import 'react-calendar/dist/Calendar.css';
 
@@ -59,7 +59,15 @@ const SetDateModal = ({ isOpen, onClose, ticket }: SetDateModalProps) => {
         createdAt: new Date()
       };
 
+      // Create the event
       await addDoc(collection(db, 'events'), eventData);
+
+      // Update the ticket with the date
+      const ticketRef = doc(db, 'tickets', ticket.id);
+      await updateDoc(ticketRef, {
+        date: date
+      });
+
       onClose();
     } catch (error) {
       console.error('Error creating event:', error);

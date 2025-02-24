@@ -42,7 +42,8 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
     // Mark messages as read when modal opens
     const ticketRef = doc(db, "tickets", ticket.id);
     updateDoc(ticketRef, {
-      lastReadTimestamp: serverTimestamp()
+      lastReadTimestamp: serverTimestamp(),
+      isViewed: true
     });
 
     // Set up ticket listener
@@ -248,12 +249,20 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
               </button>
             </div>
           ) : (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="ml-auto px-4 py-2 text-primary hover:bg-primary hover:text-white border border-primary rounded-lg transition-all"
-            >
-              Edit Ticket
-            </button>
+            <div className="flex gap-2 ml-auto">
+              <button
+                onClick={() => setIsEditing(true)}
+                className="px-4 py-2 text-primary hover:bg-primary hover:text-white border border-primary rounded-lg transition-all"
+              >
+                Edit Ticket
+              </button>
+              <button
+                onClick={() => setIsSetDateModalOpen(true)}
+                className="px-4 py-2 text-primary hover:bg-primary hover:text-white border border-primary rounded-lg transition-all"
+              >
+                Set Date
+              </button>
+            </div>
           )}
         </div>
 

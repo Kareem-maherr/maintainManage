@@ -76,10 +76,17 @@ const DashboardTicketList = ({ onViewMore }: TableOneProps) => {
         const unsubscribeTickets = onSnapshot(
           query(collection(db, 'tickets'), ...queryParams),
           (snapshot) => {
-            const ticketData = snapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }) as Ticket);
+            const ticketData = snapshot.docs.map(doc => {
+              const data = doc.data();
+              return {
+                id: doc.id,
+                ...data,
+                // Convert Firestore timestamp to formatted date string
+                date: data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleDateString() : '',
+                time: data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleTimeString() : '',
+                createdAt: data.createdAt
+              } as Ticket;
+            });
             setTickets(ticketData);
 
             // Fetch company information for each unique sender

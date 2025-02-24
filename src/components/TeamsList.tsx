@@ -11,9 +11,8 @@ interface TeamMember {
 
 interface Team {
   id: string;
-  name: string;
+  supervisor?: string;
   members: TeamMember[];
-  leadEngineer?: string;
   createdAt?: any;
 }
 
@@ -24,8 +23,7 @@ const TeamsList = () => {
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [memberCount, setMemberCount] = useState('');
   const [memberNames, setMemberNames] = useState<string[]>([]);
-  const [teamName, setTeamName] = useState('');
-  const [leadEngineer, setLeadEngineer] = useState('');
+  const [supervisor, setSupervisor] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,17 +44,17 @@ const TeamsList = () => {
   }, []);
 
   const handleCreateTeam = async () => {
-    if (memberNames.length === 0 || !teamName.trim()) return;
+    if (memberNames.length === 0 || !supervisor.trim()) return;
 
     try {
       const newTeam = {
-        name: teamName.trim(),
+        name: `${supervisor.trim()}'s Team`,
         members: memberNames.map(name => ({ 
           name: name.trim(),
           email: '',
           role: 'member'
         })),
-        leadEngineer: leadEngineer.trim(),
+        supervisor: supervisor.trim(),
         createdAt: new Date()
       };
 
@@ -64,8 +62,7 @@ const TeamsList = () => {
       setIsModalOpen(false);
       setMemberCount('');
       setMemberNames([]);
-      setTeamName('');
-      setLeadEngineer('');
+      setSupervisor('');
     } catch (error) {
       console.error('Error creating team:', error);
     }
@@ -73,9 +70,8 @@ const TeamsList = () => {
 
   const handleEditTeam = (team: Team) => {
     setEditingTeam(team);
-    setTeamName(team.name);
+    setSupervisor(team.supervisor || '');
     setMemberNames(team.members.map(member => member.name));
-    setLeadEngineer(team.leadEngineer || '');
     setIsEditModalOpen(true);
   };
 
@@ -84,13 +80,13 @@ const TeamsList = () => {
 
     try {
       const updatedTeam = {
-        name: teamName.trim(),
+        name: `${supervisor.trim()}'s Team`,
         members: memberNames.map(name => ({ 
           name: name.trim(),
           email: '',
           role: 'member'
         })),
-        leadEngineer: leadEngineer.trim()
+        supervisor: supervisor.trim()
       };
 
       const teamDocRef = doc(db, 'teams', editingTeam.id);
@@ -137,9 +133,9 @@ const TeamsList = () => {
                   onClick={() => handleEditTeam(team)}
                 />
               </div>
-              {team.leadEngineer && (
+              {team.supervisor && (
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Lead Engineer: {team.leadEngineer}
+                  Supervisor: {team.supervisor}
                 </p>
               )}
               <div className="space-y-2">
@@ -169,26 +165,16 @@ const TeamsList = () => {
             <h3 className="text-xl font-semibold mb-4">Create New Team</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Team Name</label>
+                <label className="block text-sm font-medium mb-1">Supervisor</label>
                 <input
                   type="text"
-                  value={teamName}
-                  onChange={(e) => setTeamName(e.target.value)}
+                  value={supervisor}
+                  onChange={(e) => setSupervisor(e.target.value)}
                   className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-3 font-medium outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:focus:border-primary"
+                  placeholder="Enter supervisor name"
                 />
               </div>
               
-              <div>
-                <label className="block text-sm font-medium mb-1">Lead Engineer</label>
-                <input
-                  type="text"
-                  value={leadEngineer}
-                  onChange={(e) => setLeadEngineer(e.target.value)}
-                  className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-3 font-medium outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:focus:border-primary"
-                  placeholder="Enter lead engineer name"
-                />
-              </div>
-
               <div>
                 <label className="block text-sm font-medium mb-1">Number of Members</label>
                 <input
@@ -222,8 +208,7 @@ const TeamsList = () => {
                 <button
                   onClick={() => {
                     setIsModalOpen(false);
-                    setTeamName('');
-                    setLeadEngineer('');
+                    setSupervisor('');
                     setMemberCount('');
                     setMemberNames([]);
                   }}
@@ -233,7 +218,7 @@ const TeamsList = () => {
                 </button>
                 <button
                   onClick={handleCreateTeam}
-                  disabled={!teamName.trim() || memberNames.length === 0 || memberNames.some(name => !name.trim())}
+                  disabled={!supervisor.trim() || memberNames.length === 0 || memberNames.some(name => !name.trim())}
                   className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-center font-medium text-white hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Create
@@ -251,16 +236,9 @@ const TeamsList = () => {
             <h3 className="mb-4 text-lg font-medium text-black">Edit Team</h3>
             <input
               type="text"
-              value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
-              placeholder="Team Name"
-              className="w-full mb-4 p-2 border border-gray-300 rounded"
-            />
-            <input
-              type="text"
-              value={leadEngineer}
-              onChange={(e) => setLeadEngineer(e.target.value)}
-              placeholder="Lead Engineer"
+              value={supervisor}
+              onChange={(e) => setSupervisor(e.target.value)}
+              placeholder="Supervisor"
               className="w-full mb-4 p-2 border border-gray-300 rounded"
             />
             <textarea

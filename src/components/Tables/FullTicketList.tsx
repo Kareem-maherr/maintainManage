@@ -28,6 +28,8 @@ interface FullTicket {
   status: string;
   responsible_engineer?: string;
   hasUnreadMessages?: boolean;
+  date?: any;
+  isViewed?: boolean;
 }
 
 interface FilterOptions {
@@ -184,6 +186,8 @@ const FullTicketList = () => {
               status: ticketData.status,
               responsible_engineer: ticketData.responsible_engineer,
               hasUnreadMessages,
+              date: ticketData.date,
+              isViewed: ticketData.isViewed || false,
             });
           }
 
@@ -440,6 +444,9 @@ const FullTicketList = () => {
               <th className="py-4 px-4 font-medium text-black dark:text-white">
                 Status
               </th>
+              <th className="py-4 px-4 font-medium text-black dark:text-white">
+                Date Status
+              </th>
               {isResponsibleEngineer && (
                 <th className="py-4 px-4 font-medium text-black dark:text-white">
                   Engineer
@@ -455,11 +462,16 @@ const FullTicketList = () => {
                 className="cursor-pointer hover:bg-gray-1 dark:hover:bg-meta-4"
               >
                 <td className="border-b border-[#eee] py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
-                  <h5 className="font-medium text-black dark:text-white">
+                  <h5 className="font-medium text-black dark:text-white flex items-center">
                     {ticket.title}
-                    {ticket.hasUnreadMessages && (
-                      <span className="ml-2 inline-flex h-2 w-2 rounded-full bg-meta-1"></span>
-                    )}
+                    <div className="flex gap-2 ml-2">
+                      {!ticket.isViewed && (
+                        <span className="inline-flex h-2 w-2 rounded-full bg-primary"></span>
+                      )}
+                      {ticket.hasUnreadMessages && (
+                        <span className="inline-flex h-2 w-2 rounded-full bg-meta-1"></span>
+                      )}
+                    </div>
                   </h5>
                 </td>
                 <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
@@ -496,6 +508,17 @@ const FullTicketList = () => {
                     )}`}
                   >
                     {ticket.status}
+                  </p>
+                </td>
+                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
+                  <p
+                    className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${
+                      ticket.date
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}
+                  >
+                    {ticket.date ? 'Set' : 'Not Set'}
                   </p>
                 </td>
                 {isResponsibleEngineer && (

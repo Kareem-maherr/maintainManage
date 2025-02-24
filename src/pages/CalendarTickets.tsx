@@ -13,6 +13,8 @@ import {
 import { db } from '../config/firebase';
 import { getAuth } from 'firebase/auth';
 import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
+import FilterTicketsModal from '../components/Modals/FilterTicketsModal';
+import PDFGenerator from '../components/PDFGenerator/PDFGenerator';
 
 interface CalendarEvent {
   id: string;
@@ -35,9 +37,15 @@ const statusColors: { [key: string]: string } = {
 
 const CalendarTickets = () => {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [filteredEvents, setFilteredEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEngineer, setIsEngineer] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [activeFilters, setActiveFilters] = useState({
+    status: 'all',
+    engineer: 'all'
+  });
   const auth = getAuth();
 
   useEffect(() => {
@@ -104,6 +112,7 @@ const CalendarTickets = () => {
           } as CalendarEvent;
         });
         setEvents(eventsData);
+        setFilteredEvents(eventsData);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching events:', error);
@@ -164,6 +173,25 @@ const CalendarTickets = () => {
     }
   };
 
+  const applyFilters = ({ status, engineer }: { status: string; engineer: string }) => {
+    setActiveFilters({ status, engineer });
+    
+    let filtered = [...events];
+    
+    // Apply status filter
+    if (status !== 'all') {
+      const isResolved = status === 'Resolved';
+      filtered = filtered.filter(event => event.resolved === isResolved);
+    }
+    
+    // Apply engineer filter
+    if (engineer !== 'all') {
+      filtered = filtered.filter(event => event.responsibleEngineer === engineer);
+    }
+    
+    setFilteredEvents(filtered);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-80">
@@ -177,7 +205,7 @@ const CalendarTickets = () => {
       <Breadcrumb pageName="Calendar Events" />
 
       <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="flex justify-between items-center">
           <div>
             <h4 className="text-xl font-semibold text-black dark:text-white mb-1">
               Calendar Events
@@ -185,6 +213,31 @@ const CalendarTickets = () => {
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Overview of all scheduled events and their status
             </p>
+          </div>
+          <div className="flex space-x-4">
+            <PDFGenerator 
+              events={filteredEvents} 
+              filters={activeFilters}
+            />
+            <button
+              onClick={() => setIsFilterModalOpen(true)}
+              className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
+            >
+              <svg 
+                className="w-4 h-4 mr-2" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  strokeWidth="2" 
+                  d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" 
+                />
+              </svg>
+              Filter Events
+            </button>
           </div>
         </div>
 
@@ -232,7 +285,7 @@ const CalendarTickets = () => {
             </div>
           </div>
 
-          {events.length === 0 ? (
+          {filteredEvents.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-gray-400">
               <svg
                 className="w-16 h-16 mb-4 text-gray-300"
@@ -251,7 +304,7 @@ const CalendarTickets = () => {
               <p className="text-sm">Schedule an event to see it here</p>
             </div>
           ) : (
-            events.map((event, index) => {
+            filteredEvents.map((event, index) => {
               const status = getEventStatus(event);
               const duration = Math.ceil(
                 (event.endDate.getTime() - event.startDate.getTime()) /
@@ -262,7 +315,7 @@ const CalendarTickets = () => {
                 <div
                   key={event.id}
                   className={`grid grid-cols-9 hover:bg-gray-50 dark:hover:bg-meta-4 transition-colors duration-200 ${
-                    index === events.length - 1
+                    index === filteredEvents.length - 1
                       ? ''
                       : 'border-b border-stroke dark:border-strokedark'
                   } sm:grid-cols-9`}
@@ -395,6 +448,12 @@ const CalendarTickets = () => {
           )}
         </div>
       </div>
+      <FilterTicketsModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        onApplyFilters={applyFilters}
+        events={filteredEvents}
+      />
     </>
   );
 };

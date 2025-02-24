@@ -4,6 +4,7 @@ import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
 import EventModal from '../components/Modals/EventModal';
 import DayEventsModal from '../components/Modals/DayEventsModal';
 import EventDetailsModal from '../components/Modals/EventDetailsModal';
+import ScanDocumentModal from '../components/Modals/ScanDocumentModal';
 import { db } from '../config/firebase';
 import {
   collection,
@@ -52,6 +53,7 @@ const CalendarComponent = () => {
   );
   const [teams, setTeams] = useState<Team[]>([]);
   const [dayEvents, setDayEvents] = useState<CalendarEvent[]>([]);
+  const [isScanModalOpen, setIsScanModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchTeams = async () => {
@@ -106,7 +108,6 @@ const CalendarComponent = () => {
     
     setSelectedDate(value);
     setDayEvents(events);
-    setIsDayModalOpen(true);
   };
 
   const handleEventClick = (event: CalendarEvent) => {
@@ -121,7 +122,6 @@ const CalendarComponent = () => {
       leadEngineer: teamDetails?.leadEngineer || '',
     });
     setIsDetailsModalOpen(true);
-    setIsDayModalOpen(false);
   };
 
   const handleEventSave = async (
@@ -222,18 +222,39 @@ const CalendarComponent = () => {
     <>
       <Breadcrumb pageName="Calendar" />
 
-      <div className="flex flex-col gap-10">
+      <div className="flex flex-col gap-6">
         <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
-          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex justify-between items-center mb-6">
             <h4 className="text-xl font-semibold text-black dark:text-white">
               Team Calendar
             </h4>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center justify-center rounded-full bg-primary py-3 px-10 text-center font-medium text-white hover:bg-opacity-90 lg:px-8 xl:px-10"
-            >
-              <span className="mr-2">+</span> Add Event
-            </button>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-center font-medium text-white hover:bg-opacity-90"
+              >
+                Add Event
+              </button>
+              <button
+                onClick={() => setIsScanModalOpen(true)}
+                className="inline-flex items-center justify-center rounded-md border border-primary py-2 px-6 text-center font-medium text-primary hover:bg-primary hover:text-white"
+              >
+                <svg 
+                  className="w-5 h-5 mr-2" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth="2" 
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" 
+                  />
+                </svg>
+                Scan Document
+              </button>
+            </div>
           </div>
 
           <div className="calendar-container">
@@ -247,26 +268,64 @@ const CalendarComponent = () => {
             />
           </div>
         </div>
+
+        {dayEvents.length > 0 && (
+          <div className="rounded-sm border border-stroke bg-white px-5 py-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5">
+            <div className="mb-6">
+              <h4 className="text-xl font-semibold text-black dark:text-white">
+                Events for {format(selectedDate, 'MMMM d, yyyy')}
+              </h4>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {dayEvents.map((event) => (
+                <div
+                  key={event.id}
+                  onClick={() => handleEventClick(event)}
+                  className="cursor-pointer rounded-sm border border-stroke bg-gray-2 p-4 dark:border-strokedark dark:bg-meta-4 hover:bg-gray-3 dark:hover:bg-meta-3 transition-colors"
+                >
+                  <h4 className="text-lg font-semibold text-black dark:text-white mb-2">
+                    {event.title}
+                  </h4>
+                  <div className="flex flex-col gap-2 text-sm">
+                    <div className="flex items-center text-black dark:text-white">
+                      <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {format(event.startDate, 'h:mm a')} - {format(event.endDate, 'h:mm a')}
+                    </div>
+                    <div className="flex items-center text-black dark:text-white">
+                      <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      {event.teamName}
+                    </div>
+                    <div className="flex items-center text-black dark:text-white">
+                      <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                      {event.projectName}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {isDayModalOpen && (
-        <DayEventsModal
-          date={selectedDate}
-          events={dayEvents}
-          onClose={() => setIsDayModalOpen(false)}
-          onEventClick={handleEventClick}
-        />
-      )}
+      <EventModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        teams={teams}
+        onSave={handleEventSave}
+        selectedDate={selectedDate}
+      />
 
-      {isModalOpen && (
-        <EventModal
-          onClose={() => setIsModalOpen(false)}
-          isOpen={isModalOpen}
-          teams={teams}
-          onSave={handleEventSave}
-          selectedDate={selectedDate}
-        />
-      )}
+      <ScanDocumentModal
+        isOpen={isScanModalOpen}
+        onClose={() => setIsScanModalOpen(false)}
+      />
 
       {isDetailsModalOpen && selectedEvent && (
         <EventDetailsModal

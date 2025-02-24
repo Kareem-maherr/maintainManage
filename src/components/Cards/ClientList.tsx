@@ -3,6 +3,11 @@ import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore
 import { db } from '../../config/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
 
+interface Project {
+  id: string;
+  project: string[];
+}
+
 interface User {
   id: string;
   companyName: string;
@@ -11,6 +16,8 @@ interface User {
   address: string;
   role: string;
   createdAt: any;
+  responsible_engineer: string;
+  project: string[];
 }
 
 const ClientList = () => {
@@ -23,6 +30,7 @@ const ClientList = () => {
     phone: '',
     address: '',
     role: 'client',
+    project: ['']
   });
 
   useEffect(() => {
@@ -58,6 +66,7 @@ const ClientList = () => {
         phone: '',
         address: '',
         role: 'client',
+        project: ['']
       });
     } catch (error) {
       console.error('Error adding user:', error);
@@ -80,6 +89,8 @@ const ClientList = () => {
   const ClientCard = ({ user }: { user: User }) => {
     const isExpanded = expandedUserId === user.id;
     const avatarColor = getRandomColor(user.companyName || user.email);
+
+    console.log('User projects:', user.project); // Debug log
 
     return (
       <motion.div
@@ -170,6 +181,44 @@ const ClientList = () => {
                     <span className="truncate">Joined: {user.createdAt.toDate().toLocaleDateString()}</span>
                   </motion.div>
                 )}
+                {user.responsible_engineer && (
+                  <motion.div
+                    initial={{ y: -10, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.25 }}
+                    className="flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span className="truncate">Engineer: {user.responsible_engineer}</span>
+                  </motion.div>
+                )}
+
+                {/* Projects Section */}
+                {user.project && user.project.length > 0 && (
+                  <motion.div
+                    initial={{ y: -10, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="mt-4"
+                  >
+                    <h4 className="font-medium text-gray-900 mb-2">Projects</h4>
+                    <div className="space-y-2">
+                      {user.project.map((projectName, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center p-2 bg-gray-50 rounded-lg"
+                        >
+                          <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          <span className="text-gray-700">{projectName}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -255,6 +304,17 @@ const ClientList = () => {
                     type="text"
                     value={newUser.address}
                     onChange={(e) => setNewUser({ ...newUser, address: e.target.value })}
+                    className="w-full rounded-lg border-[1.5px] border-stroke bg-transparent py-2 px-4 outline-none transition focus:border-primary active:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Projects
+                  </label>
+                  <input
+                    type="text"
+                    value={newUser.project[0]}
+                    onChange={(e) => setNewUser({ ...newUser, project: [e.target.value] })}
                     className="w-full rounded-lg border-[1.5px] border-stroke bg-transparent py-2 px-4 outline-none transition focus:border-primary active:border-primary"
                   />
                 </div>
