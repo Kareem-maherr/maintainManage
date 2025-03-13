@@ -3,6 +3,7 @@ import { collection, onSnapshot, query, where, Timestamp, orderBy, limit, getDoc
 import { getAuth } from 'firebase/auth';
 import { db } from '../../config/firebase';
 import { NavLink } from 'react-router-dom';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface Ticket {
   id: string;
@@ -40,8 +41,8 @@ interface TableOneProps {
 const DashboardTicketList = ({ onViewMore }: TableOneProps) => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [userCompanies, setUserCompanies] = useState<{ [key: string]: string }>({});
-  const [isEngineer, setIsEngineer] = useState(false);
   const auth = getAuth();
+  const { t } = useLanguage();
 
   useEffect(() => {
     const fetchUserRoleAndTickets = async () => {
@@ -56,10 +57,6 @@ const DashboardTicketList = ({ onViewMore }: TableOneProps) => {
         // Check if user is admin based on role
         const isAdmin = userData?.role === 'admin';
 
-        // Check if user is a responsible engineer
-        const isEngineer = userData?.role === 'engineer';
-        setIsEngineer(isEngineer && !isAdmin);
-
         // Base query parameters
         const queryParams = [
           where('status', '==', 'Open'),
@@ -68,7 +65,7 @@ const DashboardTicketList = ({ onViewMore }: TableOneProps) => {
         ];
 
         // If engineer (and not admin), only show their tickets
-        if (isEngineer && !isAdmin) {
+        if (userData?.role === 'engineer' && !isAdmin) {
           queryParams.unshift(where('responsible_engineer', '==', currentUser.email));
         }
 
@@ -134,14 +131,14 @@ const DashboardTicketList = ({ onViewMore }: TableOneProps) => {
     <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
       <div className="mb-6 flex items-center justify-between">
         <h4 className="text-xl font-semibold text-black dark:text-white">
-          Recent Open Tickets
+          {t('dashboard.tickets.recentOpenTickets')}
         </h4>
         <NavLink to="/tables">
         <button
           onClick={onViewMore}
           className="inline-flex items-center justify-center rounded-md border border-primary py-2 px-6 text-center font-medium text-primary hover:bg-opacity-90"
         >
-          View More
+          {t('dashboard.tickets.viewMore')}
         </button>
         </NavLink>
       </div>
@@ -149,22 +146,22 @@ const DashboardTicketList = ({ onViewMore }: TableOneProps) => {
       <div className="flex flex-col">
         <div className="grid grid-cols-3 rounded-sm bg-gray-2 dark:bg-meta-4 sm:grid-cols-6">
           <div className="p-2.5 xl:p-5">
-            <h5 className="text-sm font-medium uppercase xsm:text-base">Title</h5>
+            <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.title')}</h5>
           </div>
           <div className="p-2.5 text-center xl:p-5">
-            <h5 className="text-sm font-medium uppercase xsm:text-base">Company</h5>
+            <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.company')}</h5>
           </div>
           <div className="p-2.5 text-center xl:p-5">
-            <h5 className="text-sm font-medium uppercase xsm:text-base">Location</h5>
+            <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.location')}</h5>
           </div>
           <div className="hidden p-2.5 text-center sm:block xl:p-5">
-            <h5 className="text-sm font-medium uppercase xsm:text-base">Date</h5>
+            <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.date')}</h5>
           </div>
           <div className="hidden p-2.5 text-center sm:block xl:p-5">
-            <h5 className="text-sm font-medium uppercase xsm:text-base">Severity</h5>
+            <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.severity')}</h5>
           </div>
           <div className="hidden p-2.5 text-center sm:block xl:p-5">
-            <h5 className="text-sm font-medium uppercase xsm:text-base">Status</h5>
+            <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.status')}</h5>
           </div>
         </div>
 

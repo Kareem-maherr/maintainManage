@@ -1,0 +1,218 @@
+{
+  "dashboard": {
+    "title": "لوحة التحكم",
+    "totalRevenue": "إجمالي الإيرادات",
+    "totalTickets": "إجمالي التذاكر",
+    "totalEngineers": "إجمالي المهندسين",
+    "totalTeams": "إجمالي الفرق",
+    "stats": {
+      "totalEmergencyTickets": "إجمالي تذاكر الطوارئ",
+      "openEmergencyTickets": "تذاكر الطوارئ المفتوحة",
+      "resolvedEmergencyTickets": "تذاكر الطوارئ المحلولة",
+      "totalScheduledTickets": "إجمالي التذاكر المجدولة",
+      "maintenance": "الصيانة"
+    },
+    "tickets": {
+      "recentOpenTickets": "التذاكر المفتوحة الأخيرة",
+      "viewMore": "عرض المزيد",
+      "table": {
+        "title": "العنوان",
+        "company": "الشركة",
+        "location": "الموقع",
+        "date": "التاريخ",
+        "severity": "الخطورة",
+        "status": "الحالة"
+      }
+    },
+    "charts": {
+      "openTickets": "التذاكر المفتوحة",
+      "resolvedTickets": "التذاكر المحلولة",
+      "closedTickets": "التذاكر المغلقة",
+      "last12Months": "آخر 12 شهر",
+      "ticketsThisWeek": "تذاكر هذا الأسبوع",
+      "timeFilter": {
+        "thisWeek": "هذا الأسبوع",
+        "lastWeek": "الأسبوع الماضي"
+      },
+      "numberOfTickets": "عدد التذاكر"
+    }
+  },
+  "navigation": {
+    "menu": "القائمة",
+    "dashboard": "لوحة التحكم",
+    "calendar": "التقويم",
+    "profile": "الملف الشخصي",
+    "settings": "الإعدادات",
+    "teams": "الفرق",
+    "engineers": "المهندسين",
+    "tickets": "التذاكر",
+    "scheduledTickets": "التذاكر المجدولة",
+    "emergencyTickets": "تذاكر الطوارئ",
+    "clientList": "قائمة العملاء"
+  },
+  "common": {
+    "search": "بحث",
+    "viewAll": "عرض الكل",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "edit": "تعديل",
+    "delete": "حذف",
+    "loading": "جاري التحميل...",
+    "noData": "لا توجد بيانات متاحة",
+    "status": "الحالة",
+    "actions": "الإجراءات",
+    "close": "إغلاق"
+  },
+  "clients": {
+    "companyName": "اسم الشركة",
+    "companyNameNotSet": "لم يتم تحديد اسم الشركة",
+    "email": "البريد الإلكتروني",
+    "phone": "الهاتف",
+    "address": "العنوان",
+    "joined": "تاريخ الانضمام",
+    "engineer": "المهندس المسؤول",
+    "projects": "المشاريع",
+    "addClient": "إضافة عميل",
+    "newClient": "عميل جديد",
+    "projectList": "قائمة المشاريع",
+    "title": "العملاء",
+    "addNewClient": "إضافة عميل جديد",
+    "cancel": "إلغاء",
+    "clientNames": {
+      "Arab Emergency": "الطوارئ العربية",
+      "Dr. Suliman Al Habib": "دكتور سليمان الحبيب",
+      "Jarir Bookstore": "مكتبة جرير",
+      "Agility": "اجيليتي",
+      "Al Inma Bank": "مصرف الانماء",
+      "Prime Gate": "البوابة الرئيسية"
+    }
+  },
+  "engineers": {
+    "title": "المهندسين",
+    "loading": "جاري التحميل...",
+    "noEngineers": "لم يتم العثور على مهندسين.",
+    "email": "البريد الإلكتروني",
+    "role": {
+      "admin": "مدير",
+      "engineer": "مهندس"
+    },
+    "specialties": "التخصصات",
+    "assignedProjects": "المشاريع المكلف بها",
+    "printReport": "طباعة التقرير",
+    "projectReport": "تقرير المشروع",
+    "currentProject": "المشروع الحالي",
+    "noProjects": "لا توجد مشاريع مكلف بها",
+    "projectId": "رقم المشروع",
+    "contact": "جهة الاتصال",
+    "contactEmail": "البريد الإلكتروني",
+    "contactPhone": "رقم الهاتف",
+    "notSpecified": "غير محدد",
+    "availability": {
+      "available": "متاح",
+      "busy": "مشغول",
+      "away": "غائب",
+      "unknown": "غير معروف"
+    },
+    "tickets": {
+      "open": "التذاكر المفتوحة",
+      "resolved": "التذاكر المحلولة",
+      "noOpen": "لا توجد تذاكر مفتوحة",
+      "noResolved": "لا توجد تذاكر محلولة",
+      "priority": "الأولوية",
+      "created": "تاريخ الإنشاء",
+      "due": "تاريخ الاستحقاق",
+      "resolvedDate": "تاريخ الحل",
+      "resolution": "الحل",
+      "noDescription": "لا يوجد وصف"
+    },
+    "engineerNames": {
+      "Ragheb": "راغب",
+      "Mohammed": "محمد",
+      "Rawan": "روان",
+      "Abdulaziz": "عبدالعزيز",
+      "Farahat": "فراحات",
+      "Hossam": "حسام",
+      "admin": "admin"
+    }
+  },
+  "calendar": {
+    "title": "التقويم",
+    "teamCalendar": "تقويم الفريق",
+    "addEvent": "إضافة حدث",
+    "scanDocument": "مسح المستند",
+    "eventsFor": "أحداث {0}",
+    "time": {
+      "start": "البداية",
+      "end": "النهاية"
+    },
+    "details": {
+      "team": "الفريق",
+      "project": "المشروع",
+      "viewDetails": "تفاصيل الحدث",
+      "responsible": "المهندس المسؤول",
+      "location": "الموقع",
+      "contact": {
+        "email": "البريد الإلكتروني",
+        "phone": "الهاتف"
+      },
+      "noTeamMembers": "لا يوجد أعضاء في الفريق"
+    }
+  },
+  "tickets": {
+    "createTicket": "إنشاء تذكرة",
+    "ticketDetails": "تفاصيل التذكرة",
+    "assignTo": "تعيين إلى",
+    "priority": "الأولوية",
+    "dueDate": "تاريخ الاستحقاق",
+    "status": {
+      "open": "مفتوح",
+      "inprogress": "قيد التنفيذ",
+      "resolved": "مكتمل",
+      "cancelled": "ملغي"
+    },
+    "allTickets": "جميع التذاكر",
+    "overview": "نظرة عامة على جميع التذاكر وحالتها",
+    "createNewTicket": "إنشاء تذكرة جديدة",
+    "generatePDF": "إنشاء ملف PDF",
+    "filters": {
+      "startDate": "تاريخ البداية",
+      "endDate": "تاريخ النهاية",
+      "company": "الشركة",
+      "severity": "الخطورة",
+      "status": "الحالة",
+      "location": "الموقع",
+      "clearFilters": "مسح التصفية",
+      "all": "الكل"
+    },
+    "severity": {
+      "critical": "حرج",
+      "high": "مرتفع",
+      "medium": "متوسط",
+      "low": "منخفض"
+    },
+    "table": {
+      "title": "العنوان",
+      "company": "الشركة",
+      "location": "الموقع",
+      "created": "تاريخ الإنشاء",
+      "timeElapsed": "الوقت المنقضي",
+      "severity": "الخطورة",
+      "status": "الحالة",
+      "dateStatus": "حالة التاريخ",
+      "assignedTo": "المهندس",
+      "unassigned": "غير معين",
+      "dateSet": "محدد",
+      "dateNotSet": "غير محدد"
+    },
+    "timeElapsed": {
+      "days": "يوم",
+      "daysPlural": "أيام",
+      "hours": "ساعة",
+      "hoursPlural": "ساعات",
+      "minutes": "دقيقة",
+      "minutesPlural": "دقائق",
+      "justNow": "الآن",
+      "na": "غير متوفر"
+    }
+  }
+}

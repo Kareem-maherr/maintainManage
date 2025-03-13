@@ -1,8 +1,9 @@
 import { ApexOptions } from 'apexcharts';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import ReactApexChart from 'react-apexcharts';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface Ticket {
   id: string;
@@ -11,14 +12,14 @@ interface Ticket {
 }
 
 const ChartOne = () => {
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const { t } = useLanguage();
   const [series, setSeries] = useState([
     {
-      name: 'Open Tickets',
+      name: t('dashboard.charts.openTickets'),
       data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // Last 12 months
     },
     {
-      name: 'Resolved Tickets',
+      name: t('dashboard.charts.resolvedTickets'),
       data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // Last 12 months
     },
   ]);
@@ -34,8 +35,6 @@ const ChartOne = () => {
         id: doc.id,
         ...doc.data(),
       })) as Ticket[];
-
-      setTickets(ticketsData);
 
       // Get last 12 months
       const months = Array.from({ length: 12 }, (_, i) => {
@@ -68,11 +67,11 @@ const ChartOne = () => {
 
       setSeries([
         {
-          name: 'Open Tickets',
+          name: t('dashboard.charts.openTickets'),
           data: openTickets,
         },
         {
-          name: 'Resolved Tickets',
+          name: t('dashboard.charts.resolvedTickets'),
           data: resolvedTickets,
         },
       ]);
@@ -149,7 +148,7 @@ const ChartOne = () => {
     },
     yaxis: {
       title: {
-        text: 'Number of Tickets',
+        text: t('dashboard.charts.numberOfTickets'),
       },
     },
     tooltip: {
@@ -173,8 +172,8 @@ const ChartOne = () => {
               <span className="block h-2.5 w-full max-w-2.5 rounded-full bg-primary"></span>
             </span>
             <div className="w-full">
-              <p className="font-semibold text-primary">Open Tickets</p>
-              <p className="text-sm font-medium">Last 12 months</p>
+              <p className="font-semibold text-primary">{t('dashboard.charts.openTickets')}</p>
+              <p className="text-sm font-medium">{t('dashboard.charts.last12Months')}</p>
             </div>
           </div>
           <div className="flex min-w-47.5">
@@ -182,8 +181,8 @@ const ChartOne = () => {
               <span className="block h-2.5 w-full max-w-2.5 rounded-full bg-secondary"></span>
             </span>
             <div className="w-full">
-              <p className="font-semibold text-secondary">Resolved Tickets</p>
-              <p className="text-sm font-medium">Last 12 months</p>
+              <p className="font-semibold text-secondary">{t('dashboard.charts.resolvedTickets')}</p>
+              <p className="text-sm font-medium">{t('dashboard.charts.last12Months')}</p>
             </div>
           </div>
         </div>

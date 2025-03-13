@@ -17,6 +17,7 @@ import { getAuth } from 'firebase/auth';
 import TicketDetailsModal from '../Modals/TicketDetailsModal';
 import NewTicketModal from '../Modals/NewTicketModal';
 import PDFGeneratorModal from '../Modals/PDFGeneratorModal';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface FullTicket {
   id: string;
@@ -61,9 +62,21 @@ const FullTicketList = () => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const auth = getAuth();
+  const { t } = useLanguage();
 
-  const severityOptions = ['All', 'Critical', 'High', 'Medium', 'Low'];
-  const statusOptions = ['All', 'Open', 'In Progress', 'Resolved'];
+  const severityOptions = [
+    t('tickets.filters.all'),
+    t('tickets.severity.critical'),
+    t('tickets.severity.high'),
+    t('tickets.severity.medium'),
+    t('tickets.severity.low'),
+  ];
+  const statusOptions = [
+    t('tickets.filters.all'),
+    t('tickets.status.open'),
+    t('tickets.status.inprogress'),
+    t('tickets.status.resolved'),
+  ];
 
   useEffect(() => {
     const fetchUserRoleAndTickets = async () => {
@@ -237,7 +250,7 @@ const FullTicketList = () => {
   };
 
   const getTimeElapsed = (createdAt: any) => {
-    if (!createdAt) return 'N/A';
+    if (!createdAt) return t('tickets.timeElapsed.na');
 
     const now = new Date();
     const created = createdAt.toDate();
@@ -248,10 +261,10 @@ const FullTicketList = () => {
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
 
-    if (days > 0) return `${days} day${days > 1 ? 's' : ''}`;
-    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''}`;
-    if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''}`;
-    return 'Just now';
+    if (days > 0) return `${days} ${days > 1 ? t('tickets.timeElapsed.daysPlural') : t('tickets.timeElapsed.days')}`;
+    if (hours > 0) return `${hours} ${hours > 1 ? t('tickets.timeElapsed.hoursPlural') : t('tickets.timeElapsed.hours')}`;
+    if (minutes > 0) return `${minutes} ${minutes > 1 ? t('tickets.timeElapsed.minutesPlural') : t('tickets.timeElapsed.minutes')}`;
+    return t('tickets.timeElapsed.justNow');
   };
 
   if (loading) {
@@ -280,10 +293,10 @@ const FullTicketList = () => {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h4 className="text-xl font-semibold text-black dark:text-white mb-1">
-            All Tickets
+            {t('tickets.allTickets')}
           </h4>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Overview of all tickets and their status
+            {t('tickets.overview')}
           </p>
         </div>
         {isAdmin && (
@@ -292,13 +305,13 @@ const FullTicketList = () => {
               onClick={() => setShowNewTicketModal(true)}
               className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
             >
-              Create New Ticket
+              {t('tickets.createNewTicket')}
             </button>
             <button
               onClick={() => setShowPDFModal(true)}
               className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
             >
-              Generate PDF
+              {t('tickets.generatePDF')}
             </button>
           </div>
         )}
@@ -312,7 +325,7 @@ const FullTicketList = () => {
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-6">
         <div>
           <label className="mb-2.5 block text-black dark:text-white">
-            Start Date
+            {t('tickets.filters.startDate')}
           </label>
           <input
             type="date"
@@ -325,7 +338,7 @@ const FullTicketList = () => {
 
         <div>
           <label className="mb-2.5 block text-black dark:text-white">
-            End Date
+            {t('tickets.filters.endDate')}
           </label>
           <input
             type="date"
@@ -338,7 +351,7 @@ const FullTicketList = () => {
 
         <div>
           <label className="mb-2.5 block text-black dark:text-white">
-            Company
+            {t('tickets.filters.company')}
           </label>
           <select
             name="company"
@@ -356,7 +369,7 @@ const FullTicketList = () => {
 
         <div>
           <label className="mb-2.5 block text-black dark:text-white">
-            Severity
+            {t('tickets.filters.severity')}
           </label>
           <select
             name="severity"
@@ -374,7 +387,7 @@ const FullTicketList = () => {
 
         <div>
           <label className="mb-2.5 block text-black dark:text-white">
-            Status
+            {t('tickets.filters.status')}
           </label>
           <select
             name="status"
@@ -392,7 +405,7 @@ const FullTicketList = () => {
 
         <div>
           <label className="mb-2.5 block text-black dark:text-white">
-            Location
+            {t('tickets.filters.location')}
           </label>
           <select
             name="location"
@@ -414,7 +427,7 @@ const FullTicketList = () => {
           onClick={clearFilters}
           className="inline-flex items-center justify-center rounded-md border border-stroke py-2 px-6 text-center font-medium text-black hover:bg-opacity-90 dark:border-strokedark dark:text-white"
         >
-          Clear Filters
+          {t('tickets.filters.clearFilters')}
         </button>
       </div>
 
@@ -423,33 +436,33 @@ const FullTicketList = () => {
         <table className="w-full table-auto">
           <thead>
             <tr className="bg-gray-2 text-left dark:bg-meta-4">
-              <th className="min-w-[220px] py-4 px-4 font-medium text-black dark:text-white xl:pl-11">
-                Title
+              <th className="min-w-[220px] py-4 px-4 font-medium text-black dark:text-white xl:pl-11 whitespace-nowrap">
+                {t('tickets.table.title')}
               </th>
-              <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white">
-                Company
+              <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
+                {t('tickets.table.company')}
               </th>
-              <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white">
-                Location
+              <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
+                {t('tickets.table.location')}
               </th>
-              <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white">
-                Created
+              <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
+                {t('tickets.table.created')}
               </th>
-              <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white">
-                Time Open
+              <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
+                {t('tickets.table.timeElapsed')}
               </th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white">
-                Severity
+              <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
+                {t('tickets.table.severity')}
               </th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white">
-                Status
+              <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
+                {t('tickets.table.status')}
               </th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white">
-                Date Status
+              <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
+                {t('tickets.table.dateStatus')}
               </th>
               {isResponsibleEngineer && (
-                <th className="py-4 px-4 font-medium text-black dark:text-white">
-                  Engineer
+                <th className="min-w-[180px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
+                  {t('tickets.table.assignedTo')}
                 </th>
               )}
             </tr>
@@ -478,9 +491,7 @@ const FullTicketList = () => {
                   <p className="text-black dark:text-white">{ticket.company}</p>
                 </td>
                 <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
-                  <p className="text-black dark:text-white">
-                    {ticket.location}
-                  </p>
+                  <p className="text-black dark:text-white">{ticket.location}</p>
                 </td>
                 <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
                   <p className="text-black dark:text-white">
@@ -498,7 +509,7 @@ const FullTicketList = () => {
                       ticket.severity,
                     )}`}
                   >
-                    {ticket.severity}
+                    {t(`tickets.severity.${ticket.severity.toLowerCase()}`)}
                   </p>
                 </td>
                 <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
@@ -507,7 +518,7 @@ const FullTicketList = () => {
                       ticket.status,
                     )}`}
                   >
-                    {ticket.status}
+                    {t(`tickets.status.${ticket.status.toLowerCase().replace(' ', '')}`)}
                   </p>
                 </td>
                 <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
@@ -518,13 +529,13 @@ const FullTicketList = () => {
                         : 'bg-gray-100 text-gray-800'
                     }`}
                   >
-                    {ticket.date ? 'Set' : 'Not Set'}
+                    {ticket.date ? t('tickets.table.dateSet') : t('tickets.table.dateNotSet')}
                   </p>
                 </td>
                 {isResponsibleEngineer && (
                   <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
                     <p className="text-black dark:text-white">
-                      {ticket.responsible_engineer || 'Unassigned'}
+                      {ticket.responsible_engineer || t('tickets.table.unassigned')}
                     </p>
                   </td>
                 )}

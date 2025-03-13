@@ -1,0 +1,218 @@
+{
+  "dashboard": {
+    "title": "Dashboard",
+    "totalRevenue": "Total Revenue",
+    "totalTickets": "Total Tickets",
+    "totalEngineers": "Total Engineers",
+    "totalTeams": "Total Teams",
+    "stats": {
+      "totalEmergencyTickets": "Total Emergency Tickets",
+      "openEmergencyTickets": "Open Emergency Tickets",
+      "resolvedEmergencyTickets": "Resolved Emergency Tickets",
+      "totalScheduledTickets": "Total Scheduled Tickets",
+      "maintenance": "Maintenance"
+    },
+    "tickets": {
+      "recentOpenTickets": "Recent Open Tickets",
+      "viewMore": "View More",
+      "table": {
+        "title": "Title",
+        "company": "Company",
+        "location": "Location",
+        "date": "Date",
+        "severity": "Severity",
+        "status": "Status"
+      }
+    },
+    "charts": {
+      "openTickets": "Open Tickets",
+      "resolvedTickets": "Resolved Tickets",
+      "closedTickets": "Closed Tickets",
+      "last12Months": "Last 12 months",
+      "ticketsThisWeek": "Tickets this week",
+      "timeFilter": {
+        "thisWeek": "This Week",
+        "lastWeek": "Last Week"
+      },
+      "numberOfTickets": "Number of Tickets"
+    }
+  },
+  "navigation": {
+    "menu": "MENU",
+    "dashboard": "Dashboard",
+    "calendar": "Calendar",
+    "profile": "Profile",
+    "settings": "Settings",
+    "teams": "Teams",
+    "engineers": "Engineers",
+    "tickets": "Tickets",
+    "scheduledTickets": "Scheduled Tickets",
+    "emergencyTickets": "Emergency Tickets",
+    "clientList": "Client List"
+  },
+  "common": {
+    "search": "Search",
+    "viewAll": "View All",
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "loading": "Loading...",
+    "noData": "No data available",
+    "status": "Status",
+    "actions": "Actions",
+    "close": "Close"
+  },
+  "clients": {
+    "companyName": "Company Name",
+    "companyNameNotSet": "Company Name Not Set",
+    "email": "Email",
+    "phone": "Phone",
+    "address": "Address",
+    "joined": "Joined",
+    "engineer": "Engineer",
+    "projects": "Projects",
+    "addClient": "Add Client",
+    "newClient": "New Client",
+    "projectList": "Project List",
+    "title": "Clients",
+    "addNewClient": "Add New Client",
+    "cancel": "Cancel",
+    "clientNames": {
+      "Arab Emergency": "Arab Emergency",
+      "Dr. Suliman Al Habib": "Dr. Suliman Al Habib",
+      "Agility": "Agility",
+      "Prime Gate": "Prime Gate",
+      "Al Inma Bank": "Al Inma Bank",
+      "Jarir Bookstore": "Jarir Bookstore"
+    }
+  },
+  "engineers": {
+    "title": "Engineers",
+    "loading": "Loading...",
+    "noEngineers": "No engineers found.",
+    "email": "Email",
+    "role": {
+      "admin": "Admin",
+      "engineer": "Engineer"
+    },
+    "specialties": "Specialties",
+    "assignedProjects": "Assigned Projects",
+    "printReport": "Print Report",
+    "projectReport": "Project Report",
+    "currentProject": "Current Project",
+    "noProjects": "No projects assigned",
+    "projectId": "Project ID",
+    "contact": "Contact",
+    "contactEmail": "Email",
+    "contactPhone": "Phone",
+    "notSpecified": "Not specified",
+    "availability": {
+      "available": "Available",
+      "busy": "Busy",
+      "away": "Away",
+      "unknown": "Unknown"
+    },
+    "tickets": {
+      "open": "Open Tickets",
+      "resolved": "Resolved Tickets",
+      "noOpen": "No open tickets",
+      "noResolved": "No resolved tickets",
+      "priority": "Priority",
+      "created": "Created",
+      "due": "Due",
+      "resolvedDate": "Resolved Date",
+      "resolution": "Resolution",
+      "noDescription": "No description"
+    },
+    "engineerNames": {
+      "Ragheb": "Ragheb",
+      "Mohammed": "Mohammed",
+      "Rawan": "Rawan",
+      "Abdulaziz": "Abdulaziz",
+      "Farahat": "Farahat",
+      "Hossam": "Hossam",
+      "admin": "Admin"
+    }
+  },
+  "calendar": {
+    "title": "Calendar",
+    "teamCalendar": "Team Calendar",
+    "addEvent": "Add Event",
+    "scanDocument": "Scan Document",
+    "eventsFor": "Events for {0}",
+    "time": {
+      "start": "Start",
+      "end": "End"
+    },
+    "details": {
+      "team": "Team",
+      "project": "Project",
+      "viewDetails": "Event Details",
+      "responsible": "Responsible Engineer",
+      "location": "Location",
+      "contact": {
+        "email": "Email",
+        "phone": "Phone"
+      },
+      "noTeamMembers": "No team members assigned"
+    }
+  },
+  "tickets": {
+    "createTicket": "Create Ticket",
+    "ticketDetails": "Ticket Details",
+    "assignTo": "Assign To",
+    "priority": "Priority",
+    "dueDate": "Due Date",
+    "status": {
+      "open": "Open",
+      "inProgress": "In Progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "allTickets": "All Tickets",
+    "overview": "Overview of all tickets and their status",
+    "createNewTicket": "Create New Ticket",
+    "generatePDF": "Generate PDF",
+    "filters": {
+      "startDate": "Start Date",
+      "endDate": "End Date",
+      "company": "Company",
+      "severity": "Severity",
+      "status": "Status",
+      "location": "Location",
+      "clearFilters": "Clear Filters",
+      "all": "All"
+    },
+    "severity": {
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "table": {
+      "title": "Title",
+      "company": "Company",
+      "location": "Location",
+      "created": "Created",
+      "timeElapsed": "Time Open",
+      "severity": "Severity",
+      "status": "Status",
+      "dateStatus": "Date Status",
+      "assignedTo": "Engineer",
+      "unassigned": "Unassigned",
+      "dateSet": "Set",
+      "dateNotSet": "Not Set"
+    },
+    "timeElapsed": {
+      "days": "day",
+      "daysPlural": "days",
+      "hours": "hour",
+      "hoursPlural": "hours",
+      "minutes": "minute",
+      "minutesPlural": "minutes",
+      "justNow": "Just now",
+      "na": "N/A"
+    }
+  }
+}

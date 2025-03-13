@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import Calendar from 'react-calendar';
 import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
 import EventModal from '../components/Modals/EventModal';
-import DayEventsModal from '../components/Modals/DayEventsModal';
 import EventDetailsModal from '../components/Modals/EventDetailsModal';
 import ScanDocumentModal from '../components/Modals/ScanDocumentModal';
 import { db } from '../config/firebase';
+import { useLanguage } from '../contexts/LanguageContext';
 import {
   collection,
   getDocs,
@@ -33,27 +33,25 @@ interface CalendarEvent {
   projectId: string;
   projectName: string;
   teamMembers?: { name: string }[];
-  projectManager?: string;
-  location?: string;
-  email?: string;
-  phone?: string;
+  projectManager: string;
+  location: string;
+  email: string;
+  phone: string;
   leadEngineer?: string;
   responsibleEngineer?: string;
 }
 
 const CalendarComponent = () => {
-  const [date, setDate] = useState(new Date());
+  const [date, setDate] = useState<Date>(new Date());
   const [myEvents, setMyEvents] = useState<CalendarEvent[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDayModalOpen, setIsDayModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
-    null,
-  );
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [dayEvents, setDayEvents] = useState<CalendarEvent[]>([]);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const { t } = useLanguage();
 
   useEffect(() => {
     const fetchTeams = async () => {
@@ -112,25 +110,26 @@ const CalendarComponent = () => {
 
   const handleEventClick = (event: CalendarEvent) => {
     const teamDetails = teams.find((team) => team.name === event.teamName);
-    setSelectedEvent({
+    const fullEvent: CalendarEvent = {
       ...event,
       teamMembers: teamDetails?.members || [],
-      projectManager: '',
-      location: '',
-      email: '',
-      phone: '',
+      projectManager: event.projectManager || '',
+      location: event.location || '',
+      email: event.email || '',
+      phone: event.phone || '',
       leadEngineer: teamDetails?.leadEngineer || '',
-    });
+    };
+    setSelectedEvent(fullEvent);
     setIsDetailsModalOpen(true);
   };
 
   const handleEventSave = async (
     teamId: string,
-    projectId: string,
+    eventTitle: string,
     startDate: Date,
     endDate: Date,
     responsibleEngineer?: string,
-    eventTitle: string,
+    location?: string
   ) => {
     const mockProjects = [
       { id: '1', name: 'Al Shaee3 Group' },
@@ -140,12 +139,12 @@ const CalendarComponent = () => {
       { id: '5', name: 'LUCID' },
     ];
 
-    const projectName =
-      mockProjects.find((p) => p.id === projectId)?.name || '';
+    const projectId = '1'; // Default to first project for now
+    const projectName = mockProjects.find((p) => p.id === projectId)?.name || '';
 
     try {
       const team = teams.find((t) => t.name === teamId);
-      const newEvent: Omit<CalendarEvent, 'id'> = {
+      const newEvent: CalendarEvent = {
         title: eventTitle,
         startDate,
         endDate,
@@ -154,7 +153,7 @@ const CalendarComponent = () => {
         projectName,
         teamMembers: team?.members || [],
         projectManager: '',
-        location: '',
+        location: location || '',
         email: '',
         phone: '',
         leadEngineer: team?.leadEngineer || '',
@@ -220,20 +219,20 @@ const CalendarComponent = () => {
 
   return (
     <>
-      <Breadcrumb pageName="Calendar" />
+      <Breadcrumb pageName={t('calendar.title')} />
 
       <div className="flex flex-col gap-6">
         <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
           <div className="flex justify-between items-center mb-6">
             <h4 className="text-xl font-semibold text-black dark:text-white">
-              Team Calendar
+              {t('calendar.teamCalendar')}
             </h4>
             <div className="flex gap-4">
               <button
                 onClick={() => setIsModalOpen(true)}
                 className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-center font-medium text-white hover:bg-opacity-90"
               >
-                Add Event
+                {t('calendar.addEvent')}
               </button>
               <button
                 onClick={() => setIsScanModalOpen(true)}
@@ -252,16 +251,20 @@ const CalendarComponent = () => {
                     d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" 
                   />
                 </svg>
-                Scan Document
+                {t('calendar.scanDocument')}
               </button>
             </div>
           </div>
 
           <div className="calendar-container">
             <Calendar
-              onChange={setDate}
+              onChange={(value) => {
+                if (value instanceof Date) {
+                  setDate(value);
+                }
+              }}
               value={date}
-              onClickDay={handleDateClick}
+              onClickDay={(value: Date) => handleDateClick(value)}
               tileClassName={tileClassName}
               tileContent={tileContent}
               className="custom-calendar"
@@ -273,7 +276,7 @@ const CalendarComponent = () => {
           <div className="rounded-sm border border-stroke bg-white px-5 py-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5">
             <div className="mb-6">
               <h4 className="text-xl font-semibold text-black dark:text-white">
-                Events for {format(selectedDate, 'MMMM d, yyyy')}
+                {t('calendar.eventsFor').replace('{0}', format(selectedDate, 'MMMM d, yyyy'))}
               </h4>
             </div>
 
@@ -298,13 +301,19 @@ const CalendarComponent = () => {
                       <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                       </svg>
-                      {event.teamName}
+                      <span className="flex items-center">
+                        <span className="mr-1">{t('calendar.details.team')}:</span>
+                        {event.teamName}
+                      </span>
                     </div>
                     <div className="flex items-center text-black dark:text-white">
                       <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                       </svg>
-                      {event.projectName}
+                      <span className="flex items-center">
+                        <span className="mr-1">{t('calendar.details.project')}:</span>
+                        {event.projectName}
+                      </span>
                     </div>
                   </div>
                 </div>

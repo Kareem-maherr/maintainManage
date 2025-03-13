@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface Project {
   id: string;
@@ -32,6 +33,7 @@ const ClientList = () => {
     role: 'client',
     project: ['']
   });
+  const { t } = useLanguage();
 
   useEffect(() => {
     fetchUsers();
@@ -115,7 +117,7 @@ const ClientList = () => {
             </motion.div>
             <div className="flex-1 min-w-0">
               <motion.h3 layout className="text-xl font-semibold text-gray-900 truncate">
-                {user.companyName || 'Company Name Not Set'}
+                {t(`clients.clientNames.${user.companyName}`) || user.companyName || t('clients.companyNameNotSet')}
               </motion.h3>
               <motion.p layout className="text-sm text-gray-500 truncate">{user.email}</motion.p>
             </div>
@@ -139,7 +141,7 @@ const ClientList = () => {
                   <svg className="w-4 h-4 mr-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
-                  <span className="truncate">{user.email}</span>
+                  <span className="truncate">{t('clients.email')}: {user.email}</span>
                 </motion.div>
                 {user.phone && (
                   <motion.div
@@ -151,7 +153,7 @@ const ClientList = () => {
                     <svg className="w-4 h-4 mr-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                     </svg>
-                    <span className="truncate">{user.phone}</span>
+                    <span className="truncate">{t('clients.phone')}: {user.phone}</span>
                   </motion.div>
                 )}
                 {user.address && (
@@ -165,7 +167,7 @@ const ClientList = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                    <span className="truncate">{user.address}</span>
+                    <span className="truncate">{t('clients.address')}: {user.address}</span>
                   </motion.div>
                 )}
                 {user.createdAt && (
@@ -178,7 +180,7 @@ const ClientList = () => {
                     <svg className="w-4 h-4 mr-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    <span className="truncate">Joined: {user.createdAt.toDate().toLocaleDateString()}</span>
+                    <span className="truncate">{t('clients.joined')}: {user.createdAt.toDate().toLocaleDateString()}</span>
                   </motion.div>
                 )}
                 {user.responsible_engineer && (
@@ -191,7 +193,7 @@ const ClientList = () => {
                     <svg className="w-4 h-4 mr-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
-                    <span className="truncate">Engineer: {user.responsible_engineer}</span>
+                    <span className="truncate">{t('clients.engineer')}: {user.responsible_engineer}</span>
                   </motion.div>
                 )}
 
@@ -203,17 +205,11 @@ const ClientList = () => {
                     transition={{ delay: 0.3 }}
                     className="mt-4"
                   >
-                    <h4 className="font-medium text-gray-900 mb-2">Projects</h4>
-                    <div className="space-y-2">
-                      {user.project.map((projectName, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center p-2 bg-gray-50 rounded-lg"
-                        >
-                          <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                          </svg>
-                          <span className="text-gray-700">{projectName}</span>
+                    <h4 className="font-medium text-gray-900 mb-2">{t('clients.projects')}:</h4>
+                    <div className="space-y-1">
+                      {user.project.map((project, index) => (
+                        <div key={index} className="text-sm text-gray-600">
+                          • {project}
                         </div>
                       ))}
                     </div>
@@ -234,16 +230,22 @@ const ClientList = () => {
         animate={{ opacity: 1, y: 0 }}
         className="flex justify-between items-center mb-6"
       >
-        <h2 className="text-2xl font-semibold text-gray-900">Clients</h2>
+        <h2 className="text-2xl font-semibold text-gray-900">{t('clients.title')}</h2>
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => setIsAddingUser(true)}
           className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-opacity-90 transition-colors"
         >
-          Add New Client
+          {t('clients.addNewClient')}
         </motion.button>
       </motion.div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {users.map(user => (
+          <ClientCard key={user.id} user={user} />
+        ))}
+      </div>
 
       <AnimatePresence>
         {isAddingUser && (
@@ -251,7 +253,7 @@ const ClientList = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center backdrop-blur-sm"
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -259,74 +261,71 @@ const ClientList = () => {
               exit={{ scale: 0.9, opacity: 0 }}
               className="relative bg-white rounded-xl shadow-lg p-6 w-[600px]"
             >
-              <h3 className="text-xl font-semibold mb-4">Add New Client</h3>
+              <h3 className="text-xl font-semibold mb-4">{t('clients.addNewClient')}</h3>
               <form onSubmit={handleAddUser} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Company Name
+                    {t('clients.companyName')}
                   </label>
                   <input
                     type="text"
                     value={newUser.companyName}
                     onChange={(e) => setNewUser({ ...newUser, companyName: e.target.value })}
-                    className="w-full rounded-lg border-[1.5px] border-stroke bg-transparent py-2 px-4 outline-none transition focus:border-primary active:border-primary"
-                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
+                    {t('clients.email')}
                   </label>
                   <input
                     type="email"
                     value={newUser.email}
                     onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                    className="w-full rounded-lg border-[1.5px] border-stroke bg-transparent py-2 px-4 outline-none transition focus:border-primary active:border-primary"
-                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Phone
+                    {t('clients.phone')}
                   </label>
                   <input
                     type="tel"
                     value={newUser.phone}
                     onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
-                    className="w-full rounded-lg border-[1.5px] border-stroke bg-transparent py-2 px-4 outline-none transition focus:border-primary active:border-primary"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address
+                    {t('clients.address')}
                   </label>
                   <input
                     type="text"
                     value={newUser.address}
                     onChange={(e) => setNewUser({ ...newUser, address: e.target.value })}
-                    className="w-full rounded-lg border-[1.5px] border-stroke bg-transparent py-2 px-4 outline-none transition focus:border-primary active:border-primary"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Projects
+                    {t('clients.projects')}
                   </label>
                   <input
                     type="text"
                     value={newUser.project[0]}
                     onChange={(e) => setNewUser({ ...newUser, project: [e.target.value] })}
-                    className="w-full rounded-lg border-[1.5px] border-stroke bg-transparent py-2 px-4 outline-none transition focus:border-primary active:border-primary"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                 </div>
-                <div className="flex justify-end space-x-3 mt-6">
+                <div className="flex justify-end space-x-4">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    type="button"
                     onClick={() => setIsAddingUser(false)}
                     className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </motion.button>
                   <motion.button
                     whileHover={{ scale: 1.05 }}
@@ -334,7 +333,7 @@ const ClientList = () => {
                     type="submit"
                     className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-opacity-90 transition-colors"
                   >
-                    Add Client
+                    {t('clients.addClient')}
                   </motion.button>
                 </div>
               </form>
@@ -342,17 +341,6 @@ const ClientList = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
-      <motion.div
-        layout
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-      >
-        <AnimatePresence>
-          {users.map((user) => (
-            <ClientCard key={user.id} user={user} />
-          ))}
-        </AnimatePresence>
-      </motion.div>
     </div>
   );
 };

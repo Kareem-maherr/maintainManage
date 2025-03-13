@@ -1,4 +1,4 @@
-import React from 'react';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface TeamMember {
   name: string;
@@ -26,6 +26,8 @@ interface EventDetailsModalProps {
 }
 
 const EventDetailsModal = ({ isOpen, onClose, event }: EventDetailsModalProps) => {
+  const { t } = useLanguage();
+  
   if (!isOpen) return null;
 
   return (
@@ -65,21 +67,21 @@ const EventDetailsModal = ({ isOpen, onClose, event }: EventDetailsModalProps) =
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">
-                Project Manager
+                {t('calendar.details.project')}
               </label>
               <p className="text-black dark:text-white">{event.projectManager}</p>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">
-                Location
+                {t('calendar.details.location')}
               </label>
               <p className="text-black dark:text-white">{event.location}</p>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">
-                Team
+                {t('calendar.details.team')}
               </label>
               <p className="text-black dark:text-white">{event.teamName}</p>
             </div>
@@ -88,21 +90,21 @@ const EventDetailsModal = ({ isOpen, onClose, event }: EventDetailsModalProps) =
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">
-                Email
+                {t('calendar.details.contact.email')}
               </label>
               <p className="text-black dark:text-white">{event.email}</p>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">
-                Phone
+                {t('calendar.details.contact.phone')}
               </label>
               <p className="text-black dark:text-white">{event.phone}</p>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">
-                Duration
+                {t('calendar.time.start')} - {t('calendar.time.end')}
               </label>
               <p className="text-black dark:text-white">
                 {event.startDate.toLocaleDateString()} - {event.endDate.toLocaleDateString()}
@@ -111,14 +113,7 @@ const EventDetailsModal = ({ isOpen, onClose, event }: EventDetailsModalProps) =
 
             <div>
               <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">
-                Lead Engineer
-              </label>
-              <p className="text-black dark:text-white">{event.leadEngineer}</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">
-                Responsible Engineer
+                {t('calendar.details.responsible')}
               </label>
               <p className="text-black dark:text-white">{event.responsibleEngineer || 'Not assigned'}</p>
             </div>
@@ -127,7 +122,7 @@ const EventDetailsModal = ({ isOpen, onClose, event }: EventDetailsModalProps) =
           {/* Team Members Section */}
           <div className="col-span-2 mt-6">
             <h6 className="text-md font-semibold text-black dark:text-white mb-4">
-              Team Members
+              {t('calendar.details.team')}
             </h6>
             <div className="grid grid-cols-2 gap-4">
               {event.leadEngineer && (
@@ -142,7 +137,7 @@ const EventDetailsModal = ({ isOpen, onClose, event }: EventDetailsModalProps) =
                     </div>
                   </div>
                   <div>
-                    <p className="text-xs text-primary mb-0.5">Lead Engineer</p>
+                    <p className="text-xs text-primary mb-0.5">{t('calendar.details.responsible')}</p>
                     <p className="text-sm font-medium text-black dark:text-white">
                       {event.leadEngineer}
                     </p>
@@ -171,7 +166,7 @@ const EventDetailsModal = ({ isOpen, onClose, event }: EventDetailsModalProps) =
                 ))
               ) : (
                 <p className="col-span-2 text-sm text-gray-500 dark:text-gray-400">
-                  No team members assigned
+                  {t('calendar.details.noTeamMembers')}
                 </p>
               )}
             </div>
@@ -183,7 +178,7 @@ const EventDetailsModal = ({ isOpen, onClose, event }: EventDetailsModalProps) =
             onClick={onClose}
             className="rounded-md bg-primary px-6 py-2 text-white hover:bg-opacity-90"
           >
-            Close
+            {t('common.close')}
           </button>
         </div>
       </div>

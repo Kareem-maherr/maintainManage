@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import Logo from '../../../public/trace.svg';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -13,6 +13,7 @@ import {
   faUsersGear,
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 
@@ -25,6 +26,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
   const location = useLocation();
   const { pathname } = location;
   const { currentUser } = useAuth();
+  const { t } = useLanguage();
   const [isAdmin, setIsAdmin] = useState(false);
 
   const trigger = useRef<any>(null);
@@ -34,6 +36,10 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
   const [sidebarExpanded, setSidebarExpanded] = useState(
     storedSidebarExpanded === null ? false : storedSidebarExpanded === 'true',
   );
+
+  const handleSidebarExpanded = () => {
+    setSidebarExpanded(prev => !prev);
+  };
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -111,7 +117,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
           {/* <!-- Menu Group --> */}
           <div>
             <h3 className="mb-4 ml-4 text-sm font-semibold text-bodydark2">
-              MENU
+              {t('navigation.menu')}
             </h3>
 
             <ul className="mb-6 flex flex-col gap-1.5">
@@ -124,7 +130,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                   }`}
                 >
                   <FontAwesomeIcon icon={faGrip} className="h-5 w-5" />
-                  Dashboard
+                  {t('navigation.dashboard')}
                 </NavLink>
               </li>
 
@@ -138,7 +144,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                   }`}
                 >
                   <FontAwesomeIcon icon={faCalendarDays} className="h-5 w-5" />
-                  Calendar
+                  {t('navigation.calendar')}
                 </NavLink>
               </li>
 
@@ -151,7 +157,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                   }`}
                 >
                   <FontAwesomeIcon icon={faTicket} className="h-5 w-5" />
-                  Scheduled Tickets
+                  {t('navigation.scheduledTickets')}
                 </NavLink>
               </li>
 
@@ -163,7 +169,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                   }`}
                 >
                   <FontAwesomeIcon icon={faTable} className="h-5 w-5" />
-                  Emergency Tickets
+                  {t('navigation.emergencyTickets')}
                 </NavLink>
               </li>
 
@@ -177,7 +183,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                   }`}
                 >
                   <FontAwesomeIcon icon={faUser} className="h-5 w-5" />
-                  Client List
+                  {t('navigation.clientList')}
                 </NavLink>
               </li>
 
@@ -193,7 +199,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                       }`}
                     >
                       <FontAwesomeIcon icon={faUsers} className="h-5 w-5" />
-                      Teams
+                      {t('navigation.teams')}
                     </NavLink>
                   </li>
 
@@ -206,7 +212,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                       }`}
                     >
                       <FontAwesomeIcon icon={faUsersGear} className="h-5 w-5" />
-                      Engineers
+                      {t('navigation.engineers')}
                     </NavLink>
                   </li>
                 </>

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, query, onSnapshot, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import CardDataStats from '../../components/CardDataStats';
 import ChartOne from '../../components/Charts/ChartOne';
 import ChartTwo from '../../components/Charts/ChartTwo';
 import ChatCard from '../../components/Chat/ChatCard';
 import TableOne from '../../components/Tables/DashboardTicketList';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 const ECommerce: React.FC = () => {
   const [stats, setStats] = useState({
@@ -16,6 +17,7 @@ const ECommerce: React.FC = () => {
   });
 
   const [calendarTickets, setCalendarTickets] = useState(0);
+  const { t } = useLanguage();
 
   useEffect(() => {
     const ticketsRef = collection(db, 'tickets');
@@ -57,7 +59,12 @@ const ECommerce: React.FC = () => {
   return (
     <>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-4 2xl:gap-7.5">
-        <CardDataStats title="Total Emergency Tickets" total={stats.total.toString()} rate={((stats.total - stats.resolved) / stats.total * 100).toFixed(1) + '%'} levelUp>
+        <CardDataStats 
+          title={t('dashboard.stats.totalEmergencyTickets')} 
+          total={stats.total.toString()} 
+          rate={((stats.total - stats.resolved) / stats.total * 100).toFixed(1) + '%'} 
+          levelUp
+        >
           <svg
             className="fill-primary dark:fill-white"
             width="22"
@@ -76,7 +83,12 @@ const ECommerce: React.FC = () => {
             />
           </svg>
         </CardDataStats>
-        <CardDataStats title="Open Emergency Tickets" total={stats.open.toString()} rate={((stats.open / stats.total) * 100).toFixed(1) + '%'} levelUp>
+        <CardDataStats 
+          title={t('dashboard.stats.openEmergencyTickets')} 
+          total={stats.open.toString()} 
+          rate={((stats.open / stats.total) * 100).toFixed(1) + '%'} 
+          levelUp
+        >
           <svg
             className="fill-primary dark:fill-white"
             width="20"
@@ -95,7 +107,12 @@ const ECommerce: React.FC = () => {
             />
           </svg>
         </CardDataStats>
-        <CardDataStats title="Resolved Emergency Tickets" total={stats.resolved.toString()} rate={((stats.resolved / stats.total) * 100).toFixed(1) + '%'} levelDown>
+        <CardDataStats 
+          title={t('dashboard.stats.resolvedEmergencyTickets')} 
+          total={stats.resolved.toString()} 
+          rate={((stats.resolved / stats.total) * 100).toFixed(1) + '%'} 
+          levelDown
+        >
           <svg
             className="fill-primary dark:fill-white"
             width="22"
@@ -110,7 +127,12 @@ const ECommerce: React.FC = () => {
             />
           </svg>
         </CardDataStats>
-        <CardDataStats title="Total Scheduled Tickets" total={calendarTickets.toString()} rate="Maintenance" levelUp>
+        <CardDataStats 
+          title={t('dashboard.stats.totalScheduledTickets')} 
+          total={calendarTickets.toString()} 
+          rate={t('dashboard.stats.maintenance')} 
+          levelUp
+        >
           <svg
             className="fill-primary dark:fill-white"
             width="22"

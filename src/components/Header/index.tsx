@@ -4,6 +4,7 @@ import DropdownNotification from './DropdownNotification';
 import DropdownUser from './DropdownUser';
 import LogoIcon from '../../images/logo/logo-icon.svg';
 import DarkModeSwitcher from './DarkModeSwitcher';
+import LanguageSwitcher from './LanguageSwitcher';
 
 const Header = (props: {
   sidebarOpen: string | boolean | undefined;
@@ -102,6 +103,10 @@ const Header = (props: {
             {/* <!-- Dark Mode Toggler --> */}
             <DarkModeSwitcher />
             {/* <!-- Dark Mode Toggler --> */}
+
+            {/* <!-- Language Switcher --> */}
+            <LanguageSwitcher />
+            {/* <!-- Language Switcher --> */}
 
             {/* <!-- Notification Menu Area --> */}
             <DropdownNotification />
