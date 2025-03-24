@@ -84,7 +84,8 @@
       "Agility": "Agility",
       "Prime Gate": "Prime Gate",
       "Al Inma Bank": "Al Inma Bank",
-      "Jarir Bookstore": "Jarir Bookstore"
+      "Jarir Bookstore": "Jarir Bookstore",
+      "Dusman Ajnan Mall": "Dusman Ajnan Mall"
     }
   },
   "engineers": {
@@ -141,6 +142,17 @@
     "addEvent": "Add Event",
     "scanDocument": "Scan Document",
     "eventsFor": "Events for {0}",
+    "setClientDates": "Set Client Dates",
+    "client": "Client",
+    "selectClient": "Select Client",
+    "selectTeam": "Select Team",
+    "team": "Team",
+    "contractStart": "Contract Start Date",
+    "contractEnd": "Contract End Date",
+    "numberOfVisits": "Number of Visits",
+    "generateEvents": "Generate Events",
+    "generating": "Generating...",
+    "displayDate": "Display Date",
     "time": {
       "start": "Start",
       "end": "End"

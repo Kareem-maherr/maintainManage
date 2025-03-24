@@ -1,4 +1,5 @@
 import { useLanguage } from '../../contexts/LanguageContext';
+import { format } from 'date-fns';
 
 interface TeamMember {
   name: string;
@@ -107,7 +108,7 @@ const EventDetailsModal = ({ isOpen, onClose, event }: EventDetailsModalProps) =
                 {t('calendar.time.start')} - {t('calendar.time.end')}
               </label>
               <p className="text-black dark:text-white">
-                {event.startDate.toLocaleDateString()} - {event.endDate.toLocaleDateString()}
+                {format(event.startDate, 'dd/MM/yyyy')} {format(event.startDate, 'h:mm a')} - {format(event.endDate, 'dd/MM/yyyy')} {format(event.endDate, 'h:mm a')}
               </p>
             </div>
 

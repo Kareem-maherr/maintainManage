@@ -4,6 +4,7 @@ import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
 import EventModal from '../components/Modals/EventModal';
 import EventDetailsModal from '../components/Modals/EventDetailsModal';
 import ScanDocumentModal from '../components/Modals/ScanDocumentModal';
+import ClientDateModal from '../components/Modals/ClientDateModal';
 import { db } from '../config/firebase';
 import { useLanguage } from '../contexts/LanguageContext';
 import {
@@ -51,6 +52,7 @@ const CalendarComponent = () => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [dayEvents, setDayEvents] = useState<CalendarEvent[]>([]);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [isClientDateModalOpen, setIsClientDateModalOpen] = useState(false);
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -174,6 +176,10 @@ const CalendarComponent = () => {
     }
   };
 
+  const handleEventsGenerated = (events: CalendarEvent[]) => {
+    setMyEvents(prev => [...prev, ...events]);
+  };
+
   const tileContent = ({ date, view }: { date: Date; view: string }) => {
     if (view === 'month') {
       const dayEvents = myEvents.filter((event) => {
@@ -228,6 +234,12 @@ const CalendarComponent = () => {
               {t('calendar.teamCalendar')}
             </h4>
             <div className="flex gap-4">
+              <button
+                onClick={() => setIsClientDateModalOpen(true)}
+                className="inline-flex items-center justify-center rounded-md bg-success py-2 px-6 text-center font-medium text-white hover:bg-opacity-90"
+              >
+                {t('calendar.setClientDates')}
+              </button>
               <button
                 onClick={() => setIsModalOpen(true)}
                 className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-center font-medium text-white hover:bg-opacity-90"
@@ -295,7 +307,7 @@ const CalendarComponent = () => {
                       <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      {format(event.startDate, 'h:mm a')} - {format(event.endDate, 'h:mm a')}
+                      {format(event.startDate, 'dd/MM/yyyy')} {format(event.startDate, 'h:mm a')} - {format(event.endDate, 'h:mm a')}
                     </div>
                     <div className="flex items-center text-black dark:text-white">
                       <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -334,6 +346,13 @@ const CalendarComponent = () => {
       <ScanDocumentModal
         isOpen={isScanModalOpen}
         onClose={() => setIsScanModalOpen(false)}
+      />
+
+      <ClientDateModal
+        isOpen={isClientDateModalOpen}
+        onClose={() => setIsClientDateModalOpen(false)}
+        teams={teams}
+        onEventsGenerated={handleEventsGenerated}
       />
 
       {isDetailsModalOpen && selectedEvent && (

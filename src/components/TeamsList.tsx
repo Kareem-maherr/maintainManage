@@ -158,25 +158,25 @@ const TeamsList = () => {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Create Team Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white dark:bg-boxdark p-6 rounded-lg w-96">
-            <h3 className="text-xl font-semibold mb-4">Create New Team</h3>
+            <h3 className="text-xl font-semibold mb-4">إنشاء فريق جديد</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Supervisor</label>
+                <label className="block text-sm font-medium mb-1">المشرف</label>
                 <input
                   type="text"
                   value={supervisor}
                   onChange={(e) => setSupervisor(e.target.value)}
                   className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-3 font-medium outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:focus:border-primary"
-                  placeholder="Enter supervisor name"
+                  placeholder="أدخل اسم المشرف"
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium mb-1">Number of Members</label>
+                <label className="block text-sm font-medium mb-1">عدد الأعضاء</label>
                 <input
                   type="number"
                   value={memberCount}
@@ -190,7 +190,7 @@ const TeamsList = () => {
 
               {memberNames.map((name, index) => (
                 <div key={index} className="mb-4">
-                  <label className="block text-sm font-medium mb-1">Member {index + 1} name</label>
+                  <label className="block text-sm font-medium mb-1">اسم العضو {index + 1}</label>
                   <input
                     type="text"
                     value={name}
@@ -214,14 +214,14 @@ const TeamsList = () => {
                   }}
                   className="inline-flex items-center justify-center rounded-md border border-stroke py-2 px-6 text-center font-medium text-black hover:bg-opacity-90 dark:border-strokedark dark:text-white"
                 >
-                  Cancel
+                  إلغاء
                 </button>
                 <button
                   onClick={handleCreateTeam}
                   disabled={!supervisor.trim() || memberNames.length === 0 || memberNames.some(name => !name.trim())}
                   className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-center font-medium text-white hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Create
+                  إنشاء
                 </button>
               </div>
             </div>
@@ -233,18 +233,18 @@ const TeamsList = () => {
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="w-full max-w-lg p-6 bg-white rounded-md shadow-lg">
-            <h3 className="mb-4 text-lg font-medium text-black">Edit Team</h3>
+            <h3 className="mb-4 text-lg font-medium text-black">تعديل الفريق</h3>
             <input
               type="text"
               value={supervisor}
               onChange={(e) => setSupervisor(e.target.value)}
-              placeholder="Supervisor"
+              placeholder="المشرف"
               className="w-full mb-4 p-2 border border-gray-300 rounded"
             />
             <textarea
               value={memberNames.join(', ')}
               onChange={(e) => setMemberNames(e.target.value.split(',').map(name => name.trim()))}
-              placeholder="Member Names (comma separated)"
+              placeholder="أسماء الأعضاء (مفصولة بفواصل)"
               className="w-full mb-4 p-2 border border-gray-300 rounded"
             />
             <div className="flex justify-end">
@@ -252,13 +252,13 @@ const TeamsList = () => {
                 onClick={() => setIsEditModalOpen(false)}
                 className="mr-2 inline-flex items-center justify-center rounded-md bg-gray-300 py-2 px-4 text-center font-medium text-black hover:bg-opacity-90"
               >
-                Cancel
+                إلغاء
               </button>
               <button
                 onClick={handleUpdateTeam}
                 className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-4 text-center font-medium text-white hover:bg-opacity-90"
               >
-                Save Changes
+                حفظ التغييرات
               </button>
             </div>
           </div>
