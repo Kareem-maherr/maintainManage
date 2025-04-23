@@ -178,9 +178,8 @@
     "dueDate": "Due Date",
     "status": {
       "open": "Open",
-      "inProgress": "In Progress",
-      "completed": "Completed",
-      "cancelled": "Cancelled"
+      "inprogress": "In Progress",
+      "resolved": "Resolved"
     },
     "allTickets": "All Tickets",
     "overview": "Overview of all tickets and their status",

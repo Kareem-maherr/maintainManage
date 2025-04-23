@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { generateTicketsPDF } from '../PDFGenerator/TicketsPDFGenerator';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
 interface PDFGeneratorModalProps {
   onClose: () => void;
@@ -10,6 +12,13 @@ interface PDFParams {
   endDate: string;
   status: string;
   severity: string;
+  responsibleEngineer: string;
+}
+
+interface Engineer {
+  id: string;
+  email: string;
+  name: string;
 }
 
 const PDFGeneratorModal: React.FC<PDFGeneratorModalProps> = ({ onClose }) => {
@@ -17,10 +26,34 @@ const PDFGeneratorModal: React.FC<PDFGeneratorModalProps> = ({ onClose }) => {
     startDate: '',
     endDate: '',
     status: 'All',
-    severity: 'All'
+    severity: 'All',
+    responsibleEngineer: 'All'
   });
 
   const [generating, setGenerating] = useState(false);
+  const [engineers, setEngineers] = useState<Engineer[]>([]);
+
+  useEffect(() => {
+    const fetchEngineers = async () => {
+      try {
+        const engineersRef = collection(db, 'engineers');
+        const engineersQuery = query(engineersRef, where('role', '==', 'engineer'));
+        const engineersSnapshot = await getDocs(engineersQuery);
+        
+        const engineersList = engineersSnapshot.docs.map(doc => ({
+          id: doc.id,
+          email: doc.data().email,
+          name: doc.data().name || doc.data().email
+        }));
+        
+        setEngineers(engineersList);
+      } catch (error) {
+        console.error('Error fetching engineers:', error);
+      }
+    };
+
+    fetchEngineers();
+  }, []);
 
   const handleGeneratePDF = async () => {
     try {
@@ -116,6 +149,24 @@ const PDFGeneratorModal: React.FC<PDFGeneratorModalProps> = ({ onClose }) => {
                 <option value="Low">Low</option>
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="mb-2.5 block text-black dark:text-white">
+              Responsible Engineer
+            </label>
+            <select
+              value={pdfParams.responsibleEngineer}
+              onChange={(e) => setPdfParams({ ...pdfParams, responsibleEngineer: e.target.value })}
+              className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
+            >
+              <option value="All">All Engineers</option>
+              {engineers.map((engineer) => (
+                <option key={engineer.id} value={engineer.email}>
+                  {engineer.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex justify-end space-x-4 mt-6">

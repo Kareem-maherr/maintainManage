@@ -62,10 +62,11 @@ const SetDateModal = ({ isOpen, onClose, ticket }: SetDateModalProps) => {
       // Create the event
       await addDoc(collection(db, 'events'), eventData);
 
-      // Update the ticket with the date
+      // Update the ticket with the date and isDateSet flag
       const ticketRef = doc(db, 'tickets', ticket.id);
       await updateDoc(ticketRef, {
-        date: date
+        date: date,
+        isDateSet: true
       });
 
       onClose();

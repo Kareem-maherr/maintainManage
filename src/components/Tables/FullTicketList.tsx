@@ -31,6 +31,7 @@ interface FullTicket {
   hasUnreadMessages?: boolean;
   date?: any;
   isViewed?: boolean;
+  isDateSet?: boolean;
 }
 
 interface FilterOptions {
@@ -201,6 +202,7 @@ const FullTicketList = () => {
               hasUnreadMessages,
               date: ticketData.date,
               isViewed: ticketData.isViewed || false,
+              isDateSet: ticketData.isDateSet || false,
             });
           }
 
@@ -524,12 +526,14 @@ const FullTicketList = () => {
                 <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
                   <p
                     className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${
-                      ticket.date
+                      ticket.isDateSet
                         ? 'bg-green-100 text-green-800'
                         : 'bg-gray-100 text-gray-800'
                     }`}
                   >
-                    {ticket.date ? t('tickets.table.dateSet') : t('tickets.table.dateNotSet')}
+                    {ticket.isDateSet
+                      ? t('tickets.table.dateSet')
+                      : t('tickets.table.dateNotSet')}
                   </p>
                 </td>
                 {isResponsibleEngineer && (

@@ -7,6 +7,7 @@ interface PDFParams {
   endDate: string;
   status: string;
   severity: string;
+  responsibleEngineer: string;
 }
 
 export const generateTicketsPDF = async (params: PDFParams) => {
@@ -38,10 +39,15 @@ export const generateTicketsPDF = async (params: PDFParams) => {
 
     // Get tickets
     const ticketsSnapshot = await getDocs(ticketsQuery);
-    const tickets = ticketsSnapshot.docs.map(doc => ({
+    let tickets = ticketsSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+
+    // Filter by responsible engineer if specified
+    if (params.responsibleEngineer && params.responsibleEngineer !== 'All') {
+      tickets = tickets.filter(ticket => ticket.responsible_engineer === params.responsibleEngineer);
+    }
 
     // Create PDF content
     const content = createPDFContent(tickets, params);
@@ -77,6 +83,7 @@ const createPDFContent = (tickets: any[], params: PDFParams) => {
       <p><strong>Date Range:</strong> ${params.startDate || 'All'} to ${params.endDate || 'All'}</p>
       <p><strong>Status:</strong> ${params.status}</p>
       <p><strong>Severity:</strong> ${params.severity}</p>
+      <p><strong>Responsible Engineer:</strong> ${params.responsibleEngineer}</p>
       <p><strong>Total Tickets:</strong> ${tickets.length}</p>
     </div>
   `;
@@ -96,6 +103,7 @@ const createPDFContent = (tickets: any[], params: PDFParams) => {
       <th style="padding: 10px; text-align: left; border: 1px solid #E5E7EB;">Company</th>
       <th style="padding: 10px; text-align: left; border: 1px solid #E5E7EB;">Status</th>
       <th style="padding: 10px; text-align: left; border: 1px solid #E5E7EB;">Severity</th>
+      <th style="padding: 10px; text-align: left; border: 1px solid #E5E7EB;">Responsible Engineer</th>
       <th style="padding: 10px; text-align: left; border: 1px solid #E5E7EB;">Created</th>
     </tr>
   `;
@@ -115,6 +123,7 @@ const createPDFContent = (tickets: any[], params: PDFParams) => {
       <td style="padding: 10px; border: 1px solid #E5E7EB;">${ticket.company}</td>
       <td style="padding: 10px; border: 1px solid #E5E7EB;">${ticket.status}</td>
       <td style="padding: 10px; border: 1px solid #E5E7EB;">${ticket.severity}</td>
+      <td style="padding: 10px; border: 1px solid #E5E7EB;">${ticket.responsible_engineer || 'Not Assigned'}</td>
       <td style="padding: 10px; border: 1px solid #E5E7EB;">${formattedDate}</td>
     `;
     tbody.appendChild(tr);
