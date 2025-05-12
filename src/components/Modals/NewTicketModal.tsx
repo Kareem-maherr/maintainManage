@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import React, { useState, useEffect, useRef } from 'react';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, getDoc, doc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { notifyNewTicket } from '../../utils/notifications';
 import { auth } from '../../config/firebase';
@@ -25,6 +25,8 @@ interface TicketFormData {
   contactNumber: string;
   branch: string;
   attachments: File[];
+  ticketId: string;
+  noteStatus: string;
 }
 
 const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
@@ -44,16 +46,68 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
     projectNumber: '',
     contactNumber: '',
     branch: '',
-    attachments: []
+    attachments: [],
+    ticketId: '',
+    noteStatus: ''
   });
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [responsibleEngineers, setResponsibleEngineers] = useState<Array<{ id: string; email: string; name: string }>>([]);
+  const [isEngineer, setIsEngineer] = useState(false);
+  const [engineerCompanies, setEngineerCompanies] = useState<string[]>([]);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
+  const [companySearchTerm, setCompanySearchTerm] = useState<string>('');
+  const [showCompanyDropdown, setShowCompanyDropdown] = useState<boolean>(false);
+  const [filteredCompanies, setFilteredCompanies] = useState<string[]>([]);
+  const companyInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const fetchResponsibleEngineers = async () => {
+    const fetchUserRoleAndData = async () => {
       try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          console.error('No user logged in');
+          return;
+        }
+
+        setCurrentUserEmail(currentUser.email || '');
+
+        // Get user document to check role
+        const userDocRef = doc(db, 'engineers', currentUser.uid);
+        const userDoc = await getDoc(userDocRef);
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          const userRole = userData?.role;
+          setIsEngineer(userRole === 'engineer');
+
+          // If user is an engineer, fetch companies where they are responsible
+          if (userRole === 'engineer') {
+            const ticketsRef = collection(db, 'tickets');
+            const ticketsQuery = query(ticketsRef, where('responsible_engineer', '==', currentUser.email));
+            const ticketsSnapshot = await getDocs(ticketsQuery);
+            
+            // Extract unique companies from tickets
+            const companies = new Set<string>();
+            ticketsSnapshot.docs.forEach(doc => {
+              const company = doc.data().company;
+              if (company) companies.add(company);
+            });
+            
+            const companiesList = Array.from(companies);
+            setEngineerCompanies(companiesList);
+            setFilteredCompanies(companiesList);
+            
+            // Set the engineer's email as the responsible engineer
+            setTicketData(prev => ({
+              ...prev,
+              responsibleEngineer: currentUser.email || ''
+            }));
+          }
+        }
+
+        // Fetch all engineers for admin users
         const engineersRef = collection(db, 'engineers');
         const engineersQuery = query(engineersRef, where('role', '==', 'engineer'));
         const engineersSnapshot = await getDocs(engineersQuery);
@@ -66,13 +120,57 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
         
         setResponsibleEngineers(engineersList);
       } catch (error) {
-        console.error('Error fetching engineers:', error);
-        setError('Failed to load engineers list');
+        console.error('Error fetching user data:', error);
+        setError('Failed to load user data');
       }
     };
 
-    fetchResponsibleEngineers();
+    fetchUserRoleAndData();
   }, []);
+  
+  // Filter companies based on search term
+  useEffect(() => {
+    if (isEngineer && engineerCompanies.length > 0) {
+      const filtered = engineerCompanies.filter(company => 
+        company.toLowerCase().includes(companySearchTerm.toLowerCase())
+      );
+      setFilteredCompanies(filtered);
+    }
+  }, [companySearchTerm, engineerCompanies, isEngineer]);
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (companyInputRef.current && !companyInputRef.current.contains(event.target as Node)) {
+        setShowCompanyDropdown(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Generate a ticket ID from sender email and random number
+  const generateTicketId = (senderEmail: string) => {
+    // Extract the part before @ in the email
+    const senderName = senderEmail.split('@')[0] || 'unknown';
+    // Generate a random 4-digit number
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    return `${senderName}-${randomNum}`;
+  };
+
+  // Update ticket ID when sender changes
+  useEffect(() => {
+    if (ticketData.sender && ticketData.sender.includes('@')) {
+      const newTicketId = generateTicketId(ticketData.sender);
+      setTicketData(prev => ({
+        ...prev,
+        ticketId: newTicketId
+      }));
+    }
+  }, [ticketData.sender]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,6 +182,12 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
       if (!user) {
         console.error('No user logged in');
         return;
+      }
+
+      // Generate ticket ID if not already set
+      let ticketId = ticketData.ticketId;
+      if (!ticketId && ticketData.sender) {
+        ticketId = generateTicketId(ticketData.sender);
       }
 
       const newTicket = {
@@ -100,8 +204,10 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
         projectNumber: ticketData.projectNumber,
         contactNumber: ticketData.contactNumber,
         branch: ticketData.branch,
-        responsible_engineer: ticketData.responsibleEngineer ? responsibleEngineers.find(eng => eng.email === ticketData.responsibleEngineer)?.email : '',
-        isDateSet: false
+        responsible_engineer: isEngineer ? currentUserEmail : (ticketData.responsibleEngineer ? responsibleEngineers.find(eng => eng.email === ticketData.responsibleEngineer)?.email : ''),
+        isDateSet: false,
+        ticketId: ticketId,
+        noteStatus: isEngineer ? ticketData.noteStatus : ''
       };
 
       console.log('Saving ticket with data:', newTicket); 
@@ -183,18 +289,58 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
               required
             />
           </div>
+          
+          <div>
+            <label className="mb-2.5 block text-black dark:text-white">
+              Ticket ID
+            </label>
+            <input
+              type="text"
+              value={ticketData.ticketId}
+              readOnly
+              className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input bg-gray-100 cursor-not-allowed"
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Auto-generated from sender email and a random number
+            </p>
+          </div>
 
           <div>
             <label className="mb-2.5 block text-black dark:text-white">
               Company
             </label>
-            <input
-              type="text"
-              value={ticketData.company}
-              onChange={(e) => setTicketData({ ...ticketData, company: e.target.value })}
-              className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
-              required
-            />
+            <div className="relative" ref={companyInputRef}>
+              <input
+                type="text"
+                value={companySearchTerm}
+                onChange={(e) => {
+                  setCompanySearchTerm(e.target.value);
+                  setTicketData({ ...ticketData, company: e.target.value });
+                  setShowCompanyDropdown(true);
+                }}
+                onFocus={() => setShowCompanyDropdown(true)}
+                placeholder={isEngineer && engineerCompanies.length > 0 ? "Search or add company" : "Enter company name"}
+                className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
+                required
+              />
+              {isEngineer && showCompanyDropdown && filteredCompanies.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto rounded-md bg-white dark:bg-boxdark shadow-lg border border-stroke dark:border-form-strokedark">
+                  {filteredCompanies.map((company) => (
+                    <div
+                      key={company}
+                      className="px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-meta-4"
+                      onClick={() => {
+                        setTicketData({ ...ticketData, company });
+                        setCompanySearchTerm(company);
+                        setShowCompanyDropdown(false);
+                      }}
+                    >
+                      {company}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
@@ -290,30 +436,50 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
               <option value="Critical">Critical</option>
             </select>
           </div>
+          
+          {isEngineer && (
+            <div>
+              <label className="mb-2.5 block text-black dark:text-white">
+                Note Status
+              </label>
+              <select
+                value={ticketData.noteStatus}
+                onChange={(e) => setTicketData({ ...ticketData, noteStatus: e.target.value })}
+                className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
+              >
+                <option value="">Select Note Status</option>
+                <option value="Quotation Sent">Quotation Sent</option>
+                <option value="Material Not Complete">Material Not Complete</option>
+                <option value="Material Complete">Material Complete</option>
+              </select>
+            </div>
+          )}
 
-          <div>
-            <label className="mb-2.5 block text-black dark:text-white">
-              Assign to Engineer
-            </label>
-            <select
-              value={ticketData.responsibleEngineer}
-              onChange={(e) => {
-                const selectedEngineer = responsibleEngineers.find(eng => eng.id === e.target.value);
-                setTicketData({ 
-                  ...ticketData, 
-                  responsibleEngineer: selectedEngineer ? selectedEngineer.email : '' 
-                });
-              }}
-              className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
-            >
-              <option value="">Select Engineer</option>
-              {responsibleEngineers.map((engineer) => (
-                <option key={engineer.id} value={engineer.id}>
-                  {engineer.name} ({engineer.email})
-                </option>
-              ))}
-            </select>
-          </div>
+          {!isEngineer && (
+            <div>
+              <label className="mb-2.5 block text-black dark:text-white">
+                Assign to Engineer
+              </label>
+              <select
+                value={ticketData.responsibleEngineer}
+                onChange={(e) => {
+                  const selectedEngineer = responsibleEngineers.find(eng => eng.id === e.target.value);
+                  setTicketData({ 
+                    ...ticketData, 
+                    responsibleEngineer: selectedEngineer ? selectedEngineer.email : '' 
+                  });
+                }}
+                className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
+              >
+                <option value="">Select Engineer</option>
+                {responsibleEngineers.map((engineer) => (
+                  <option key={engineer.id} value={engineer.id}>
+                    {engineer.name} ({engineer.email})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="mb-2.5 block text-black dark:text-white">

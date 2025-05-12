@@ -10,7 +10,11 @@
       "openEmergencyTickets": "Open Emergency Tickets",
       "resolvedEmergencyTickets": "Resolved Emergency Tickets",
       "totalScheduledTickets": "Total Scheduled Tickets",
-      "maintenance": "Maintenance"
+      "maintenance": "Maintenance",
+      "assignedTickets": "Assigned Tickets",
+      "yourOpenTickets": "Your Open Tickets",
+      "yourResolvedTickets": "Your Resolved Tickets",
+      "yourScheduledVisits": "Your Scheduled Visits"
     },
     "tickets": {
       "recentOpenTickets": "Recent Open Tickets",
@@ -28,6 +32,8 @@
       "openTickets": "Open Tickets",
       "resolvedTickets": "Resolved Tickets",
       "closedTickets": "Closed Tickets",
+      "yourTicketsLastYear": "Tickets Last Year",
+      "yourTicketsThisWeek": "Tickets This Week",
       "last12Months": "Last 12 months",
       "ticketsThisWeek": "Tickets this week",
       "timeFilter": {
@@ -61,7 +67,9 @@
     "noData": "No data available",
     "status": "Status",
     "actions": "Actions",
-    "close": "Close"
+    "close": "Close",
+    "underConstruction": "Under Construction",
+    "comingSoon": "This feature is coming soon. Stay tuned for updates!"
   },
   "clients": {
     "companyName": "Company Name",

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, getDocs } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { collection, query, onSnapshot, getDocs, where, doc, getDoc } from 'firebase/firestore';
+import { db, auth } from '../../config/firebase';
 import CardDataStats from '../../components/CardDataStats';
 import ChartOne from '../../components/Charts/ChartOne';
 import ChartTwo from '../../components/Charts/ChartTwo';
-import ChatCard from '../../components/Chat/ChatCard';
+import UnderConstruction from '../../components/UnderConstruction/UnderConstruction';
 import TableOne from '../../components/Tables/DashboardTicketList';
 import { useLanguage } from '../../contexts/LanguageContext';
 
@@ -17,12 +17,60 @@ const ECommerce: React.FC = () => {
   });
 
   const [calendarTickets, setCalendarTickets] = useState(0);
+  const [isEngineer, setIsEngineer] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const { t } = useLanguage();
 
+  // Check user role
   useEffect(() => {
-    const ticketsRef = collection(db, 'tickets');
+    const checkUserRole = async () => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+
+      setUserEmail(currentUser.email);
+
+      try {
+        // Get user document to check role
+        const userDocRef = doc(db, 'engineers', currentUser.uid);
+        const userDoc = await getDoc(userDocRef);
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          const userRole = userData?.role;
+          setIsEngineer(userRole === 'engineer');
+          setIsAdmin(userRole === 'admin');
+        }
+      } catch (error) {
+        console.error('Error checking user role:', error);
+      }
+    };
+
+    checkUserRole();
+  }, []);
+
+  // Fetch tickets based on user role
+  useEffect(() => {
+    if (userEmail === null) return; // Wait until user email is set
     
-    const unsubscribe = onSnapshot(ticketsRef, (snapshot) => {
+    let ticketsQuery;
+    
+    if (isAdmin) {
+      // Admin sees all tickets
+      ticketsQuery = query(collection(db, 'tickets'));
+    } else if (isEngineer && userEmail) {
+      // Engineer sees only assigned tickets
+      ticketsQuery = query(
+        collection(db, 'tickets'),
+        where('responsible_engineer', '==', userEmail)
+      );
+    } else {
+      // Default case, show no tickets
+      setStats({ total: 0, open: 0, resolved: 0, template: 0 });
+      return;
+    }
+    
+    const unsubscribe = onSnapshot(ticketsQuery, (snapshot) => {
       const total = snapshot.size;
       let open = 0;
       let resolved = 0;
@@ -39,13 +87,29 @@ const ECommerce: React.FC = () => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [isAdmin, isEngineer, userEmail]);
 
   useEffect(() => {
     const fetchCalendarTickets = async () => {
+      if (userEmail === null) return; // Wait until user email is set
+      
       try {
-        const eventsCollection = collection(db, 'events');
-        const eventsQuery = query(eventsCollection);
+        let eventsQuery;
+        
+        if (isAdmin) {
+          // Admin sees all events
+          eventsQuery = query(collection(db, 'events'));
+        } else if (isEngineer && userEmail) {
+          // Engineer sees only their events
+          eventsQuery = query(
+            collection(db, 'events'),
+            where('engineerEmail', '==', userEmail)
+          );
+        } else {
+          setCalendarTickets(0);
+          return;
+        }
+        
         const eventsSnapshot = await getDocs(eventsQuery);
         setCalendarTickets(eventsSnapshot.size);
       } catch (error) {
@@ -54,15 +118,15 @@ const ECommerce: React.FC = () => {
     };
 
     fetchCalendarTickets();
-  }, []);
+  }, [isAdmin, isEngineer, userEmail]);
 
   return (
     <>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-4 2xl:gap-7.5">
         <CardDataStats 
-          title={t('dashboard.stats.totalEmergencyTickets')} 
+          title={isEngineer ? t('dashboard.stats.assignedTickets') : t('dashboard.stats.totalEmergencyTickets')} 
           total={stats.total.toString()} 
-          rate={((stats.total - stats.resolved) / stats.total * 100).toFixed(1) + '%'} 
+          rate={stats.total > 0 ? ((stats.total - stats.resolved) / stats.total * 100).toFixed(1) + '%' : '0%'} 
           levelUp
         >
           <svg
@@ -84,9 +148,9 @@ const ECommerce: React.FC = () => {
           </svg>
         </CardDataStats>
         <CardDataStats 
-          title={t('dashboard.stats.openEmergencyTickets')} 
+          title={isEngineer ? t('dashboard.stats.yourOpenTickets') : t('dashboard.stats.openEmergencyTickets')} 
           total={stats.open.toString()} 
-          rate={((stats.open / stats.total) * 100).toFixed(1) + '%'} 
+          rate={stats.total > 0 ? ((stats.open / stats.total) * 100).toFixed(1) + '%' : '0%'} 
           levelUp
         >
           <svg
@@ -108,9 +172,9 @@ const ECommerce: React.FC = () => {
           </svg>
         </CardDataStats>
         <CardDataStats 
-          title={t('dashboard.stats.resolvedEmergencyTickets')} 
+          title={isEngineer ? t('dashboard.stats.yourResolvedTickets') : t('dashboard.stats.resolvedEmergencyTickets')} 
           total={stats.resolved.toString()} 
-          rate={((stats.resolved / stats.total) * 100).toFixed(1) + '%'} 
+          rate={stats.total > 0 ? ((stats.resolved / stats.total) * 100).toFixed(1) + '%' : '0%'} 
           levelDown
         >
           <svg
@@ -128,9 +192,9 @@ const ECommerce: React.FC = () => {
           </svg>
         </CardDataStats>
         <CardDataStats 
-          title={t('dashboard.stats.totalScheduledTickets')} 
+          title={isEngineer ? t('dashboard.stats.yourScheduledVisits') : t('dashboard.stats.totalScheduledTickets')} 
           total={calendarTickets.toString()} 
-          rate={t('dashboard.stats.maintenance')} 
+          rate={isEngineer ? t('Upcoming') : t('dashboard.stats.maintenance')} 
           levelUp
         >
           <svg
@@ -158,7 +222,7 @@ const ECommerce: React.FC = () => {
         <div className="col-span-12 xl:col-span-8">
           <TableOne />
         </div>
-        <ChatCard />
+        <UnderConstruction />
       </div>
     </>
   );

@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { doc, updateDoc, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { notifyTicketUpdated } from '../../utils/notifications';
 import SetDateModal from './SetDateModal';
+import TicketDetailsExpandedModal from './TicketDetailsExpandedModal';
+import { getAuth } from 'firebase/auth';
 
 interface Message {
   id: string;
-  content: string;
+  text: string;
   sender: string;
-  timestamp: any;
+  timestamp: Timestamp;
   isAdmin: boolean;
 }
 
@@ -30,6 +32,12 @@ const statusStyles = {
   Resolved: "bg-green-100 text-green-800",
 };
 
+const noteStatusStyles = {
+  "Quotation Sent": "bg-teal-100 text-teal-800",
+  "Material Not Complete": "bg-yellow-100 text-yellow-800",
+  "Material Complete": "bg-green-100 text-green-800",
+};
+
 const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -37,8 +45,31 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
   const [editedTicket, setEditedTicket] = useState(ticket);
   const [localTicket, setLocalTicket] = useState(ticket);
   const [isSetDateModalOpen, setIsSetDateModalOpen] = useState(false);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [isEngineer, setIsEngineer] = useState(false);
+  const auth = getAuth();
+  const currentUserEmail = auth.currentUser?.email;
 
   useEffect(() => {
+    // Check if current user is an engineer
+    const checkUserRole = async () => {
+      try {
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          const userDocRef = doc(db, 'engineers', currentUser.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setIsEngineer(userData?.role === 'engineer');
+          }
+        }
+      } catch (error) {
+        console.error('Error checking user role:', error);
+      }
+    };
+    
+    checkUserRole();
+    
     // Mark messages as read when modal opens
     const ticketRef = doc(db, "tickets", ticket.id);
     updateDoc(ticketRef, {
@@ -77,12 +108,18 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
 
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      console.error('No user logged in to send message');
+      return;
+    }
+
     try {
       const messagesRef = collection(db, 'tickets', ticket.id, 'messages');
       await addDoc(messagesRef, {
-        content: newMessage,
-        sender: 'Admin', // Replace with actual user email
-        isAdmin: true,
+        text: newMessage,
+        sender: currentUser.email || 'Unknown User',
+        isAdmin: !isEngineer,
         timestamp: serverTimestamp(),
       });
 
@@ -133,7 +170,22 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
       console.error('Error updating ticket priority:', error);
     }
   };
-
+  
+  const handleNoteChange = async (noteStatus: string) => {
+    try {
+      const ticketRef = doc(db, 'tickets', ticket.id);
+      await updateDoc(ticketRef, {
+        noteStatus: noteStatus,
+        updatedAt: serverTimestamp()
+      });
+      setLocalTicket(prev => ({ ...prev, noteStatus: noteStatus }));
+      setEditedTicket(prev => ({ ...prev, noteStatus: noteStatus }));
+      await notifyTicketUpdated(ticket.id, ticket.title, `note status changed to ${noteStatus}`);
+    } catch (error) {
+      console.error('Error updating note status:', error);
+    }
+  };
+  
   const handleAssignToUser = async (userId: string, userEmail: string) => {
     try {
       const ticketRef = doc(db, 'tickets', ticket.id);
@@ -166,7 +218,13 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
                 <span className="hover:text-primary transition-colors">{ticket.title}</span>
               )}
             </h2>
-            <p className="text-sm text-gray-500">Ticket ID: #{ticket.id}</p>
+            <p className="text-sm text-gray-500">
+              Ticket ID: {localTicket.ticketId ? (
+                <span className="font-medium">{localTicket.ticketId}</span>
+              ) : (
+                <span>#{ticket.id}</span>
+              )}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -209,25 +267,41 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
                 <option value="In Progress">In Progress</option>
                 <option value="Resolved">Resolved</option>
               </select>
+              {isEngineer && (
+                <select
+                  value={editedTicket.noteStatus || ''}
+                  onChange={(e) => handleNoteChange(e.target.value)}
+                  className="px-4 py-2 text-sm font-semibold rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+                >
+                  <option value="">Select Note Status</option>
+                  <option value="Quotation Sent">Quotation Sent</option>
+                  <option value="Material Not Complete">Material Not Complete</option>
+                  <option value="Material Complete">Material Complete</option>
+                </select>
+              )}
             </>
           ) : (
             <>
               <span
-                className={`px-4 py-2 text-sm font-semibold rounded-lg ${
-                  severityStyles[localTicket.severity as keyof typeof severityStyles]
-                } cursor-pointer hover:opacity-80 transition-opacity`}
+                className={`px-4 py-2 text-sm font-semibold rounded-lg ${severityStyles[localTicket.severity as keyof typeof severityStyles]} cursor-pointer hover:opacity-80 transition-opacity`}
                 onClick={() => setIsEditing(true)}
               >
                 {localTicket.severity}
               </span>
               <span
-                className={`px-4 py-2 text-sm font-semibold rounded-lg ${
-                  statusStyles[localTicket.status as keyof typeof statusStyles]
-                } cursor-pointer hover:opacity-80 transition-opacity`}
+                className={`px-4 py-2 text-sm font-semibold rounded-lg ${statusStyles[localTicket.status as keyof typeof statusStyles]} cursor-pointer hover:opacity-80 transition-opacity`}
                 onClick={() => setIsEditing(true)}
               >
                 {localTicket.status}
               </span>
+              {isEngineer && localTicket.noteStatus && (
+                <span
+                  className={`px-4 py-2 text-sm font-semibold rounded-lg ${noteStatusStyles[localTicket.noteStatus as keyof typeof noteStatusStyles]} cursor-pointer hover:opacity-80 transition-opacity`}
+                  onClick={() => setIsEditing(true)}
+                >
+                  {localTicket.noteStatus}
+                </span>
+              )}
             </>
           )}
           {isEditing ? (
@@ -303,9 +377,39 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
             </div>
 
             <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                Details
-              </h3>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-sm font-semibold text-gray-700">
+                  Details
+                </h3>
+                {!isEditing && localTicket.ticketDetails && (
+                  <button
+                    onClick={() => setIsDetailsModalOpen(true)}
+                    className="text-sm text-primary hover:text-primary/80 flex items-center"
+                  >
+                    <svg
+                      className="w-4 h-4 mr-1"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      ></path>
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      ></path>
+                    </svg>
+                    View Full Details
+                  </button>
+                )}
+              </div>
               {isEditing ? (
                 <textarea
                   value={editedTicket.details || ''}
@@ -316,7 +420,7 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
                   placeholder="Enter ticket details..."
                 />
               ) : (
-                <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                <p className="text-sm text-gray-600 whitespace-pre-wrap max-h-[100px] overflow-hidden">
                   {localTicket.ticketDetails || 'No details provided'}
                 </p>
               )}
@@ -349,28 +453,29 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
                 Conversation
               </h3>
               <div className="space-y-4">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${
-                      message.isAdmin ? "justify-end" : "justify-start"
-                    }`}
-                  >
+                {messages.map((message) => {
+                  const isCurrentUserSender = message.sender === currentUserEmail;
+                  return (
                     <div
-                      className={`max-w-[80%] rounded-lg p-3 ${
-                        message.isAdmin
-                          ? "bg-blue-100 text-blue-900"
-                          : "bg-gray-100 text-gray-900"
-                      }`}
+                      key={message.id}
+                      className={`flex ${isCurrentUserSender ? "justify-end" : "justify-start"}`}
                     >
-                      <div className="text-xs font-medium mb-1">
-                        {message.sender} •{" "}
-                        {message.timestamp?.toDate().toLocaleString()}
+                      <div
+                        className={`max-w-[80%] rounded-lg p-3 ${
+                          isCurrentUserSender
+                            ? "bg-blue-100 text-blue-900"
+                            : "bg-gray-100 text-gray-900"
+                        }`}
+                      >
+                        <div className="text-xs font-medium mb-1">
+                          {message.sender} •{" "}
+                          {message.timestamp?.toDate().toLocaleString()}
+                        </div>
+                        <div className="text-sm">{message.text}</div>
                       </div>
-                      <div className="text-sm">{message.content}</div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {messages.length === 0 && (
                   <div className="text-center text-gray-500 text-sm">
                     No messages yet. Start the conversation!
@@ -401,12 +506,20 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
           </div>
         </div>
 
-        {/* Set Date Modal */}
-        <SetDateModal
-          isOpen={isSetDateModalOpen}
-          onClose={() => setIsSetDateModalOpen(false)}
-          ticket={ticket}
-        />
+        {isSetDateModalOpen && (
+          <SetDateModal
+            isOpen={isSetDateModalOpen}
+            ticket={localTicket}
+            onClose={() => setIsSetDateModalOpen(false)}
+          />
+        )}
+        
+        {isDetailsModalOpen && (
+          <TicketDetailsExpandedModal
+            ticketDetails={localTicket.ticketDetails || ''}
+            onClose={() => setIsDetailsModalOpen(false)}
+          />
+        )}
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ import {
   doc,
   getDocs,
   limit,
+  updateDoc,
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { getAuth } from 'firebase/auth';
@@ -32,6 +33,9 @@ interface FullTicket {
   date?: any;
   isViewed?: boolean;
   isDateSet?: boolean;
+  readableId?: string;
+  sender?: string;
+  noteStatus?: string;
 }
 
 interface FilterOptions {
@@ -60,8 +64,10 @@ const FullTicketList = () => {
   const [companies, setCompanies] = useState<string[]>([]);
   const [locations, setLocations] = useState<string[]>([]);
   const [isResponsibleEngineer, setIsResponsibleEngineer] = useState(false);
+  const [isEngineer, setIsEngineer] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
   const auth = getAuth();
   const { t } = useLanguage();
 
@@ -88,14 +94,34 @@ const FullTicketList = () => {
         setUserEmail(currentUser.email);
 
         // Get user document to check role
-        const userDoc = await getDoc(doc(db, 'engineers', currentUser.uid));
+        const userDocRef = doc(db, 'engineers', currentUser.uid);
+        console.log('Fetching engineer document from path:', userDocRef.path);
+        
+        const userDoc = await getDoc(userDocRef);
+        console.log('Document exists:', userDoc.exists());
+        
         const userData = userDoc.data();
+        console.log('User document data:', userData);
+        
         const isUserEngineer = userData?.role === 'engineer';
+        console.log('Role field value:', userData?.role);
+        console.log('Is engineer based on role:', isUserEngineer);
+        
         setIsResponsibleEngineer(isUserEngineer);
+        setIsEngineer(isUserEngineer);
 
         // Set admin status based on role in engineers collection
         const isAdmin = userData?.role === 'admin';
         setIsAdmin(isAdmin);
+        
+        // Log user information for debugging
+        console.log('User logged in:', {
+          email: currentUser.email,
+          uid: currentUser.uid,
+          role: userData?.role || 'unknown',
+          isAdmin: isAdmin,
+          isEngineer: isUserEngineer
+        });
 
         // Build query based on user role
         let ticketsQuery;
@@ -107,11 +133,13 @@ const FullTicketList = () => {
           );
         } else if (isUserEngineer && currentUser.email) {
           // Engineer sees only their tickets
+          console.log('Creating engineer query with email:', currentUser.email);
           ticketsQuery = query(
             collection(db, 'tickets'),
             where('responsible_engineer', '==', currentUser.email),
             orderBy('createdAt', 'desc'),
           );
+          console.log('Engineer query created:', ticketsQuery);
         } else {
           // Non-admin, non-engineer users should see no tickets
           setTickets([]);
@@ -169,10 +197,17 @@ const FullTicketList = () => {
         }
 
         const unsubscribe = onSnapshot(ticketsQuery, async (snapshot) => {
+          console.log('Snapshot received, document count:', snapshot.docs.length);
           const ticketsData: FullTicket[] = [];
 
           for (const doc of snapshot.docs) {
             const ticketData = doc.data();
+            console.log('Ticket found:', {
+              id: doc.id,
+              title: ticketData.title,
+              responsible_engineer: ticketData.responsible_engineer,
+              createdAt: ticketData.createdAt ? new Date(ticketData.createdAt.seconds * 1000).toLocaleString() : 'unknown'
+            });
 
             // Check for unread messages
             const messagesRef = collection(db, 'tickets', doc.id, 'messages');
@@ -203,6 +238,9 @@ const FullTicketList = () => {
               date: ticketData.date,
               isViewed: ticketData.isViewed || false,
               isDateSet: ticketData.isDateSet || false,
+              readableId: ticketData.ticketId || 'Unknown',
+              sender: ticketData.sender,
+              noteStatus: ticketData.noteStatus || '',
             });
           }
 
@@ -249,6 +287,50 @@ const FullTicketList = () => {
       status: '',
       location: '',
     });
+  };
+
+  // Generate a ticket ID from sender email and random number
+  const generateTicketId = (ticket: FullTicket) => {
+    // Get the sender email from the ticket
+    const senderEmail = ticket.sender || userEmail || 'unknown';
+    // Extract the part before @ in the email
+    const senderName = senderEmail.split('@')[0] || 'user';
+    // Generate a random 4-digit number
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    return `${senderName}-${randomNum}`;
+  };
+
+  // Handle click on Unknown ticket ID to generate a new readable ID
+  const handleGenerateTicketId = async (e: React.MouseEvent, ticket: FullTicket) => {
+    e.stopPropagation(); // Prevent opening the ticket details modal
+    
+    if (ticket.readableId !== 'Unknown' || generatingId === ticket.id) {
+      return; // Already has an ID or is currently generating
+    }
+    
+    try {
+      setGeneratingId(ticket.id);
+      const newTicketId = generateTicketId(ticket);
+      
+      // Update the ticket in Firestore
+      const ticketRef = doc(db, 'tickets', ticket.id);
+      await updateDoc(ticketRef, {
+        ticketId: newTicketId
+      });
+      
+      // Update local state
+      setTickets(prevTickets => 
+        prevTickets.map(t => 
+          t.id === ticket.id ? { ...t, readableId: newTicketId } : t
+        )
+      );
+      
+      console.log(`Generated new ticket ID: ${newTicketId} for ticket: ${ticket.id}`);
+    } catch (error) {
+      console.error('Error generating ticket ID:', error);
+    } finally {
+      setGeneratingId(null);
+    }
   };
 
   const getTimeElapsed = (createdAt: any) => {
@@ -301,7 +383,7 @@ const FullTicketList = () => {
             {t('tickets.overview')}
           </p>
         </div>
-        {isAdmin && (
+        {(isAdmin || isResponsibleEngineer) && (
           <div className="flex gap-4">
             <button
               onClick={() => setShowNewTicketModal(true)}
@@ -309,12 +391,14 @@ const FullTicketList = () => {
             >
               {t('tickets.createNewTicket')}
             </button>
-            <button
-              onClick={() => setShowPDFModal(true)}
-              className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
-            >
-              {t('tickets.generatePDF')}
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setShowPDFModal(true)}
+                className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
+              >
+                {t('tickets.generatePDF')}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -438,7 +522,10 @@ const FullTicketList = () => {
         <table className="w-full table-auto">
           <thead>
             <tr className="bg-gray-2 text-left dark:bg-meta-4">
-              <th className="min-w-[220px] py-4 px-4 font-medium text-black dark:text-white xl:pl-11 whitespace-nowrap">
+              <th className="min-w-[100px] py-4 px-4 font-medium text-black dark:text-white xl:pl-11 whitespace-nowrap">
+                ID
+              </th>
+              <th className="min-w-[220px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
                 {t('tickets.table.title')}
               </th>
               <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
@@ -462,6 +549,11 @@ const FullTicketList = () => {
               <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
                 {t('tickets.table.dateStatus')}
               </th>
+              {isEngineer && (
+                <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
+                  Note Status
+                </th>
+              )}
               {isResponsibleEngineer && (
                 <th className="min-w-[180px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
                   {t('tickets.table.assignedTo')}
@@ -477,6 +569,25 @@ const FullTicketList = () => {
                 className="cursor-pointer hover:bg-gray-1 dark:hover:bg-meta-4"
               >
                 <td className="border-b border-[#eee] py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
+                  {ticket.readableId === 'Unknown' ? (
+                    <p 
+                      className="font-medium text-meta-5 cursor-pointer hover:text-primary hover:underline"
+                      onClick={(e) => handleGenerateTicketId(e, ticket)}
+                    >
+                      {generatingId === ticket.id ? (
+                        <span className="flex items-center">
+                          <span className="animate-spin h-3 w-3 mr-1 border-t-2 border-b-2 border-primary rounded-full"></span>
+                          Generating...
+                        </span>
+                      ) : (
+                        'Unknown (click to generate)'
+                      )}
+                    </p>
+                  ) : (
+                    <p className="font-medium text-meta-5">{ticket.readableId}</p>
+                  )}
+                </td>
+                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
                   <h5 className="font-medium text-black dark:text-white flex items-center">
                     {ticket.title}
                     <div className="flex gap-2 ml-2">
@@ -536,6 +647,24 @@ const FullTicketList = () => {
                       : t('tickets.table.dateNotSet')}
                   </p>
                 </td>
+                {isEngineer && (
+                  <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
+                    {ticket.noteStatus ? (
+                      <p
+                        className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${
+                          ticket.noteStatus === 'Quotation Sent' ? 'bg-teal-100 text-teal-800' :
+                          ticket.noteStatus === 'Material Not Complete' ? 'bg-yellow-100 text-yellow-800' :
+                          ticket.noteStatus === 'Material Complete' ? 'bg-green-100 text-green-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {ticket.noteStatus}
+                      </p>
+                    ) : (
+                      <p className="text-gray-500 italic">Not set</p>
+                    )}
+                  </td>
+                )}
                 {isResponsibleEngineer && (
                   <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
                     <p className="text-black dark:text-white">

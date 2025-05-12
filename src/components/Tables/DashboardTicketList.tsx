@@ -19,6 +19,7 @@ interface Ticket {
   createdAt: Timestamp;
   hasUnreadMessages: boolean;
   responsible_engineer?: string;
+  readableId?: string;
 }
 
 const priorityStyles: { [key: string]: string } = {
@@ -81,7 +82,8 @@ const DashboardTicketList = ({ onViewMore }: TableOneProps) => {
                 // Convert Firestore timestamp to formatted date string
                 date: data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleDateString() : '',
                 time: data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleTimeString() : '',
-                createdAt: data.createdAt
+                createdAt: data.createdAt,
+                readableId: data.readableId || 'Unknown'
               } as Ticket;
             });
             setTickets(ticketData);
@@ -144,7 +146,10 @@ const DashboardTicketList = ({ onViewMore }: TableOneProps) => {
       </div>
 
       <div className="flex flex-col">
-        <div className="grid grid-cols-3 rounded-sm bg-gray-2 dark:bg-meta-4 sm:grid-cols-6">
+        <div className="grid grid-cols-3 rounded-sm bg-gray-2 dark:bg-meta-4 sm:grid-cols-7">
+          <div className="p-2.5 xl:p-5">
+            <h5 className="text-sm font-medium uppercase xsm:text-base">ID</h5>
+          </div>
           <div className="p-2.5 xl:p-5">
             <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.title')}</h5>
           </div>
@@ -167,13 +172,18 @@ const DashboardTicketList = ({ onViewMore }: TableOneProps) => {
 
         {tickets.map((ticket, key) => (
           <div
-            className={`grid grid-cols-3 sm:grid-cols-6 ${
+            className={`grid grid-cols-3 sm:grid-cols-7 ${
               key === tickets.length - 1
                 ? ''
                 : 'border-b border-stroke dark:border-strokedark'
             }`}
             key={ticket.id}
           >
+            <div className="flex items-center gap-3 p-2.5 xl:p-5">
+              <p className="text-meta-5">
+                {ticket.readableId}
+              </p>
+            </div>
             <div className="flex items-center gap-3 p-2.5 xl:p-5">
               <p className="text-black dark:text-white">
                 {ticket.title}

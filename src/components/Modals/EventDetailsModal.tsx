@@ -1,8 +1,20 @@
+import { useState, useEffect } from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { format } from 'date-fns';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+import { getAuth } from 'firebase/auth';
 
 interface TeamMember {
   name: string;
+}
+
+interface Message {
+  id: string;
+  content: string;
+  sender: string;
+  timestamp: any;
+  isAdmin: boolean;
 }
 
 interface ProjectDetails {
@@ -28,6 +40,57 @@ interface EventDetailsModalProps {
 
 const EventDetailsModal = ({ isOpen, onClose, event }: EventDetailsModalProps) => {
   const { t } = useLanguage();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessage, setNewMessage] = useState("");
+  const auth = getAuth();
+  
+  useEffect(() => {
+    if (!isOpen || !event.projectName) return;
+    
+    // Set up messages listener
+    const messagesRef = collection(db, "events", event.projectName, "messages");
+    const q = query(messagesRef, orderBy("timestamp", "asc"));
+
+    const unsubscribeMessages = onSnapshot(q, (snapshot) => {
+      console.log('Messages snapshot received:', snapshot.docs.length, 'messages');
+      const messageData = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        console.log('Message data:', data);
+        return {
+          id: doc.id,
+          content: data.content || '',
+          sender: data.sender || 'Unknown',
+          timestamp: data.timestamp,
+          isAdmin: data.isAdmin || false
+        } as Message;
+      });
+      console.log('Processed messages:', messageData);
+      setMessages(messageData);
+    });
+
+    return () => {
+      unsubscribeMessages();
+    };
+  }, [isOpen, event.projectName]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+
+    try {
+      const messagesRef = collection(db, 'events', event.projectName, 'messages');
+      await addDoc(messagesRef, {
+        content: newMessage,
+        sender: auth.currentUser?.email || 'User',
+        isAdmin: true,
+        timestamp: serverTimestamp(),
+      });
+
+      setNewMessage("");
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
+  };
   
   if (!isOpen) return null;
 
@@ -174,6 +237,72 @@ const EventDetailsModal = ({ isOpen, onClose, event }: EventDetailsModalProps) =
           </div>
         </div>
 
+        {/* Conversation Section */}
+        <div className="mt-8">
+          <h5 className="text-lg font-semibold text-black dark:text-white mb-4">
+            {t('common.conversation')}
+          </h5>
+          
+          <div className="bg-gray-50 dark:bg-meta-4 p-4 rounded-lg max-h-[300px] overflow-y-auto mb-4">
+            <div className="space-y-4">
+              {/* Debug information */}
+              <div className="text-xs text-gray-500 mb-2">
+                Messages count: {messages.length}
+              </div>
+              
+              {messages.length > 0 ? (
+                messages.map((message, index) => {
+                  // Log each message for debugging
+                  console.log(`Rendering message ${index}:`, message);
+                  
+                  return (
+                    <div key={message.id || index} className="border border-gray-200 p-3 rounded-lg">
+                      <div className="font-medium text-sm text-black dark:text-white">
+                        From: {typeof message.sender === 'string' ? message.sender : 'Unknown sender'}
+                      </div>
+                      <div className="text-xs text-gray-500 mb-2">
+                        {message.timestamp ? 
+                          (typeof message.timestamp.toDate === 'function' ? 
+                            message.timestamp.toDate().toLocaleString() : 
+                            'Invalid timestamp') : 
+                          'No timestamp'}
+                      </div>
+                      <div className="mt-2 text-sm text-black dark:text-white break-words">
+                        {typeof message.content === 'string' ? message.content : 'Message content unavailable'}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-center text-gray-500 dark:text-gray-400 text-sm p-4 border border-dashed border-gray-300 rounded-lg">
+                  No messages available
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Message Input */}
+          <form onSubmit={handleSendMessage} className="flex gap-2">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder={t('common.typeMessage')}
+              className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary dark:bg-boxdark dark:border-strokedark dark:text-white"
+            />
+            <button
+              type="submit"
+              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-opacity-90 disabled:opacity-50 flex items-center gap-2"
+              disabled={!newMessage.trim()}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+              {t('common.send')}
+            </button>
+          </form>
+        </div>
+        
         <div className="mt-8 flex justify-end">
           <button
             onClick={onClose}

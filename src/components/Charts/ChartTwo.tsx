@@ -1,19 +1,145 @@
 import { ApexOptions } from 'apexcharts';
+import { useState, useEffect } from 'react';
 import ReactApexChart from 'react-apexcharts';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { db, auth } from '../../config/firebase';
 import { useLanguage } from '../../contexts/LanguageContext';
 
 const ChartTwo: React.FC = () => {
   const { t } = useLanguage();
-  const series = [
+  const [series, setSeries] = useState([
     {
       name: t('dashboard.charts.openTickets'),
-      data: [44, 55, 41, 67, 22, 43, 65],
+      data: [0, 0, 0, 0, 0, 0, 0],
     },
     {
       name: t('dashboard.charts.closedTickets'),
-      data: [13, 23, 20, 8, 13, 27, 15],
+      data: [0, 0, 0, 0, 0, 0, 0],
     },
-  ];
+  ]);
+  
+  const [isEngineer, setIsEngineer] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [chartTitle, setChartTitle] = useState<string>(t('dashboard.charts.ticketsThisWeek'));
+  const [weekFilter, setWeekFilter] = useState<string>('thisWeek');
+  
+  // Check user role
+  useEffect(() => {
+    const checkUserRole = async () => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+
+      setUserEmail(currentUser.email);
+
+      try {
+        // Get user document to check role
+        const userDocRef = doc(db, 'engineers', currentUser.uid);
+        const userDoc = await getDoc(userDocRef);
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          const userRole = userData?.role;
+          const isUserEngineer = userRole === 'engineer';
+          setIsEngineer(isUserEngineer);
+          
+          // Set chart title based on role
+          if (isUserEngineer) {
+            setChartTitle(t('dashboard.charts.yourTicketsThisWeek'));
+          } else {
+            setChartTitle(t('dashboard.charts.ticketsThisWeek'));
+          }
+        }
+      } catch (error) {
+        console.error('Error checking user role:', error);
+      }
+    };
+
+    checkUserRole();
+  }, [t]);
+  
+  // Fetch weekly ticket data
+  useEffect(() => {
+    const fetchWeeklyData = async () => {
+      if (userEmail === null) return;
+      
+      try {
+        // Get current week's dates
+        const today = new Date();
+        const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+        
+        // Calculate start and end of week
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - daysFromMonday);
+        startOfWeek.setHours(0, 0, 0, 0);
+        
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        
+        // If last week is selected, adjust dates
+        if (weekFilter === 'lastWeek') {
+          startOfWeek.setDate(startOfWeek.getDate() - 7);
+          endOfWeek.setDate(endOfWeek.getDate() - 7);
+        }
+        
+        // Initialize data arrays for each day of the week
+        const openTickets = [0, 0, 0, 0, 0, 0, 0]; // Mon to Sun
+        const resolvedTickets = [0, 0, 0, 0, 0, 0, 0];
+        
+        // Query tickets
+        const ticketsRef = collection(db, 'tickets');
+        let ticketsQuery;
+        
+        if (isEngineer && userEmail) {
+          // Engineer sees only assigned tickets
+          ticketsQuery = query(ticketsRef, where('responsible_engineer', '==', userEmail));
+        } else {
+          // Admin sees all tickets
+          ticketsQuery = query(ticketsRef);
+        }
+        
+        const querySnapshot = await getDocs(ticketsQuery);
+        
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.createdAt) {
+            const ticketDate = data.createdAt.toDate();
+            
+            // Check if ticket is within the selected week
+            if (ticketDate >= startOfWeek && ticketDate <= endOfWeek) {
+              // Get day of week (0 = Monday in our array)
+              const dayOfWeek = ticketDate.getDay() === 0 ? 6 : ticketDate.getDay() - 1;
+              
+              // Count by status
+              if (data.status === 'Resolved') {
+                resolvedTickets[dayOfWeek]++;
+              } else {
+                openTickets[dayOfWeek]++;
+              }
+            }
+          }
+        });
+        
+        // Update chart data
+        setSeries([
+          {
+            name: t('dashboard.charts.openTickets'),
+            data: openTickets,
+          },
+          {
+            name: t('dashboard.charts.closedTickets'),
+            data: resolvedTickets,
+          },
+        ]);
+        
+      } catch (error) {
+        console.error('Error fetching weekly ticket data:', error);
+      }
+    };
+    
+    fetchWeeklyData();
+  }, [isEngineer, userEmail, weekFilter, t]);
 
   const options: ApexOptions = {
     colors: ['#3C50E0', '#80CAEE'],
@@ -77,18 +203,20 @@ const ChartTwo: React.FC = () => {
       <div className="mb-4 justify-between gap-4 sm:flex">
         <div>
           <h4 className="text-xl font-semibold text-black dark:text-white">
-            {t('dashboard.charts.ticketsThisWeek')}
+            {chartTitle}
           </h4>
         </div>
         <div>
           <div className="relative z-20 inline-block">
             <select
-              name="#"
-              id="#"
+              name="weekFilter"
+              id="weekFilter"
+              value={weekFilter}
+              onChange={(e) => setWeekFilter(e.target.value)}
               className="relative z-20 inline-flex appearance-none bg-transparent py-1 pl-3 pr-8 text-sm font-medium outline-none"
             >
-              <option value="" className='dark:bg-boxdark'>{t('dashboard.charts.timeFilter.thisWeek')}</option>
-              <option value="" className='dark:bg-boxdark'>{t('dashboard.charts.timeFilter.lastWeek')}</option>
+              <option value="thisWeek" className='dark:bg-boxdark'>{t('dashboard.charts.timeFilter.thisWeek')}</option>
+              <option value="lastWeek" className='dark:bg-boxdark'>{t('dashboard.charts.timeFilter.lastWeek')}</option>
             </select>
             <span className="absolute top-1/2 right-3 z-10 -translate-y-1/2">
               <svg

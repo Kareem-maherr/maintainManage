@@ -61,7 +61,9 @@
     "noData": "لا توجد بيانات متاحة",
     "status": "الحالة",
     "actions": "الإجراءات",
-    "close": "إغلاق"
+    "close": "إغلاق",
+    "underConstruction": "تحت الإنشاء",
+    "comingSoon": "هذه الميزة قادمة قريباً. ترقبوا التحديثات!"
   },
   "clients": {
     "companyName": "اسم الشركة",
