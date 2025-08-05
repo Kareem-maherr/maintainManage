@@ -4,6 +4,7 @@ import { db } from '../../config/firebase';
 import { notifyTicketUpdated } from '../../utils/notifications';
 import SetDateModal from './SetDateModal';
 import TicketDetailsExpandedModal from './TicketDetailsExpandedModal';
+import TransferRequestModal from './TransferRequestModal';
 import { getAuth } from 'firebase/auth';
 
 interface Message {
@@ -46,6 +47,7 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
   const [localTicket, setLocalTicket] = useState(ticket);
   const [isSetDateModalOpen, setIsSetDateModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isEngineer, setIsEngineer] = useState(false);
   const auth = getAuth();
   const currentUserEmail = auth.currentUser?.email;
@@ -336,6 +338,15 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
               >
                 Set Date
               </button>
+              <button
+                onClick={() => setIsTransferModalOpen(true)}
+                className="px-4 py-2 text-orange-600 hover:bg-orange-600 hover:text-white border border-orange-600 rounded-lg transition-all flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                Transfer
+              </button>
             </div>
           )}
         </div>
@@ -509,7 +520,7 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
         {isSetDateModalOpen && (
           <SetDateModal
             isOpen={isSetDateModalOpen}
-            ticket={localTicket}
+            tickets={[localTicket]}
             onClose={() => setIsSetDateModalOpen(false)}
           />
         )}
@@ -518,6 +529,14 @@ const TicketDetailsModal = ({ ticket, onClose }: TicketDetailsModalProps) => {
           <TicketDetailsExpandedModal
             ticketDetails={localTicket.ticketDetails || ''}
             onClose={() => setIsDetailsModalOpen(false)}
+          />
+        )}
+        
+        {isTransferModalOpen && (
+          <TransferRequestModal
+            ticket={localTicket}
+            isOpen={isTransferModalOpen}
+            onClose={() => setIsTransferModalOpen(false)}
           />
         )}
       </div>

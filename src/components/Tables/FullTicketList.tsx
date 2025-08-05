@@ -6,7 +6,6 @@ import {
   where,
   Timestamp,
   orderBy,
-  Query,
   getDoc,
   doc,
   getDocs,
@@ -18,6 +17,7 @@ import { getAuth } from 'firebase/auth';
 import TicketDetailsModal from '../Modals/TicketDetailsModal';
 import NewTicketModal from '../Modals/NewTicketModal';
 import PDFGeneratorModal from '../Modals/PDFGeneratorModal';
+import SetDateModal from '../Modals/SetDateModal';
 import { useLanguage } from '../../contexts/LanguageContext';
 
 interface FullTicket {
@@ -53,6 +53,8 @@ const FullTicketList = () => {
   const [selectedTicket, setSelectedTicket] = useState<FullTicket | null>(null);
   const [showNewTicketModal, setShowNewTicketModal] = useState(false);
   const [showPDFModal, setShowPDFModal] = useState(false);
+  const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
+  const [showSetDateModal, setShowSetDateModal] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({
     startDate: '',
     endDate: '',
@@ -70,6 +72,33 @@ const FullTicketList = () => {
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const auth = getAuth();
   const { t } = useLanguage();
+
+  // Handle checkbox selection
+  const handleTicketSelect = (ticketId: string) => {
+    const newSelected = new Set(selectedTickets);
+    if (newSelected.has(ticketId)) {
+      newSelected.delete(ticketId);
+    } else {
+      newSelected.add(ticketId);
+    }
+    setSelectedTickets(newSelected);
+  };
+
+  // Handle select all checkbox
+  const handleSelectAll = () => {
+    if (selectedTickets.size === filteredTickets.length) {
+      setSelectedTickets(new Set());
+    } else {
+      setSelectedTickets(new Set(filteredTickets.map(ticket => ticket.id)));
+    }
+  };
+
+  // Handle group event creation
+  const handleCreateGroupEvent = () => {
+    if (selectedTickets.size > 0) {
+      setShowSetDateModal(true);
+    }
+  };
 
   const severityOptions = [
     t('tickets.filters.all'),
@@ -333,6 +362,34 @@ const FullTicketList = () => {
     }
   };
 
+  // Filter tickets based on current filters
+  const filteredTickets = useMemo(() => {
+    return tickets.filter((ticket) => {
+      const matchesCompany = !filters.company || ticket.company.toLowerCase().includes(filters.company.toLowerCase());
+      const matchesSeverity = !filters.severity || filters.severity === t('tickets.filters.all') || ticket.severity.toLowerCase() === filters.severity.toLowerCase();
+      const matchesStatus = !filters.status || filters.status === t('tickets.filters.all') || ticket.status.toLowerCase() === filters.status.toLowerCase();
+      const matchesLocation = !filters.location || ticket.location.toLowerCase().includes(filters.location.toLowerCase());
+      
+      let matchesDateRange = true;
+      if (filters.startDate || filters.endDate) {
+        const ticketDate = ticket.createdAt?.toDate();
+        if (ticketDate) {
+          if (filters.startDate) {
+            const startDate = new Date(filters.startDate);
+            matchesDateRange = matchesDateRange && ticketDate >= startDate;
+          }
+          if (filters.endDate) {
+            const endDate = new Date(filters.endDate);
+            endDate.setHours(23, 59, 59, 999); // Include the entire end date
+            matchesDateRange = matchesDateRange && ticketDate <= endDate;
+          }
+        }
+      }
+      
+      return matchesCompany && matchesSeverity && matchesStatus && matchesLocation && matchesDateRange;
+    });
+  }, [tickets, filters, t]);
+
   const getTimeElapsed = (createdAt: any) => {
     if (!createdAt) return t('tickets.timeElapsed.na');
 
@@ -374,38 +431,53 @@ const FullTicketList = () => {
         <NewTicketModal onClose={() => setShowNewTicketModal(false)} />
       )}
 
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h4 className="text-xl font-semibold text-black dark:text-white mb-1">
-            {t('tickets.allTickets')}
-          </h4>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {t('tickets.overview')}
-          </p>
-        </div>
-        {(isAdmin || isResponsibleEngineer) && (
-          <div className="flex gap-4">
+      {showPDFModal && (
+        <PDFGeneratorModal
+          onClose={() => setShowPDFModal(false)}
+        />
+      )}
+      {showSetDateModal && (
+        <SetDateModal
+          isOpen={showSetDateModal}
+          onClose={() => {
+            setShowSetDateModal(false);
+            setSelectedTickets(new Set()); // Clear selection after creating event
+          }}
+          tickets={filteredTickets.filter(ticket => selectedTickets.has(ticket.id))}
+        />
+      )}
+
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-title-md2 font-semibold text-black dark:text-white">
+          {t('tickets.title')}
+        </h2>
+        <div className="flex gap-2">
+          {selectedTickets.size > 0 && (
+            <button
+              onClick={handleCreateGroupEvent}
+              className="inline-flex items-center justify-center rounded-md bg-green-600 py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 lg:px-6 xl:px-8"
+            >
+              Create Group Event ({selectedTickets.size})
+            </button>
+          )}
+          {(isAdmin || isEngineer) && (
             <button
               onClick={() => setShowNewTicketModal(true)}
-              className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
+              className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 lg:px-6 xl:px-8"
             >
-              {t('tickets.createNewTicket')}
+              {t('tickets.createTicket')}
             </button>
-            {isAdmin && (
-              <button
-                onClick={() => setShowPDFModal(true)}
-                className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
-              >
-                {t('tickets.generatePDF')}
-              </button>
-            )}
-          </div>
-        )}
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => setShowPDFModal(true)}
+              className="inline-flex items-center justify-center rounded-md bg-secondary py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 lg:px-6 xl:px-8"
+            >
+              {t('tickets.generatePDF')}
+            </button>
+          )}
+        </div>
       </div>
-
-      {showPDFModal && (
-        <PDFGeneratorModal onClose={() => setShowPDFModal(false)} />
-      )}
 
       {/* Filter Controls */}
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-6">
@@ -522,10 +594,15 @@ const FullTicketList = () => {
         <table className="w-full table-auto">
           <thead>
             <tr className="bg-gray-2 text-left dark:bg-meta-4">
-              <th className="min-w-[100px] py-4 px-4 font-medium text-black dark:text-white xl:pl-11 whitespace-nowrap">
-                ID
+              <th className="py-4 px-4 font-medium text-black dark:text-white">
+                <input
+                  type="checkbox"
+                  checked={selectedTickets.size === filteredTickets.length && filteredTickets.length > 0}
+                  onChange={handleSelectAll}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
               </th>
-              <th className="min-w-[220px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
+              <th className="min-w-[220px] py-4 px-4 font-medium text-black dark:text-white xl:pl-11">
                 {t('tickets.table.title')}
               </th>
               <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
@@ -562,13 +639,28 @@ const FullTicketList = () => {
             </tr>
           </thead>
           <tbody>
-            {tickets.map((ticket, key) => (
+            {filteredTickets.map((ticket, key) => (
               <tr
-                key={ticket.id}
-                onClick={() => setSelectedTicket(ticket)}
-                className="cursor-pointer hover:bg-gray-1 dark:hover:bg-meta-4"
+                key={key}
+                className={`hover:bg-gray-50 dark:hover:bg-meta-4 ${
+                  selectedTickets.has(ticket.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                }`}
               >
-                <td className="border-b border-[#eee] py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
+                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
+                  <input
+                    type="checkbox"
+                    checked={selectedTickets.has(ticket.id)}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      handleTicketSelect(ticket.id);
+                    }}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                </td>
+                <td 
+                  className="border-b border-[#eee] py-5 px-4 pl-9 dark:border-strokedark xl:pl-11 cursor-pointer"
+                  onClick={() => setSelectedTicket(ticket)}
+                >
                   {ticket.readableId === 'Unknown' ? (
                     <p 
                       className="font-medium text-meta-5 cursor-pointer hover:text-primary hover:underline"
@@ -600,23 +692,38 @@ const FullTicketList = () => {
                     </div>
                   </h5>
                 </td>
-                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
+                <td 
+                  className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
+                  onClick={() => setSelectedTicket(ticket)}
+                >
                   <p className="text-black dark:text-white">{ticket.company}</p>
                 </td>
-                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
+                <td 
+                  className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
+                  onClick={() => setSelectedTicket(ticket)}
+                >
                   <p className="text-black dark:text-white">{ticket.location}</p>
                 </td>
-                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
+                <td 
+                  className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
+                  onClick={() => setSelectedTicket(ticket)}
+                >
                   <p className="text-black dark:text-white">
                     {ticket.createdAt?.toDate().toLocaleDateString()}
                   </p>
                 </td>
-                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
+                <td 
+                  className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
+                  onClick={() => setSelectedTicket(ticket)}
+                >
                   <p className="text-black dark:text-white">
                     {getTimeElapsed(ticket.createdAt)}
                   </p>
                 </td>
-                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
+                <td 
+                  className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
+                  onClick={() => setSelectedTicket(ticket)}
+                >
                   <p
                     className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${getSeverityColor(
                       ticket.severity,
@@ -625,7 +732,10 @@ const FullTicketList = () => {
                     {t(`tickets.severity.${ticket.severity.toLowerCase()}`)}
                   </p>
                 </td>
-                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
+                <td 
+                  className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
+                  onClick={() => setSelectedTicket(ticket)}
+                >
                   <p
                     className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${getStatusColor(
                       ticket.status,
@@ -634,7 +744,10 @@ const FullTicketList = () => {
                     {t(`tickets.status.${ticket.status.toLowerCase().replace(' ', '')}`)}
                   </p>
                 </td>
-                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
+                <td 
+                  className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
+                  onClick={() => setSelectedTicket(ticket)}
+                >
                   <p
                     className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${
                       ticket.isDateSet
@@ -648,7 +761,10 @@ const FullTicketList = () => {
                   </p>
                 </td>
                 {isEngineer && (
-                  <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
+                  <td 
+                    className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
+                    onClick={() => setSelectedTicket(ticket)}
+                  >
                     {ticket.noteStatus ? (
                       <p
                         className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${
@@ -666,7 +782,10 @@ const FullTicketList = () => {
                   </td>
                 )}
                 {isResponsibleEngineer && (
-                  <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
+                  <td 
+                    className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
+                    onClick={() => setSelectedTicket(ticket)}
+                  >
                     <p className="text-black dark:text-white">
                       {ticket.responsible_engineer || t('tickets.table.unassigned')}
                     </p>

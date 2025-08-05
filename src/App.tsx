@@ -22,6 +22,7 @@ import DefaultLayout from './layout/DefaultLayout';
 import Teams from './pages/Teams';
 import CalendarTickets from './pages/CalendarTickets';
 import Engineers from './pages/Engineers';
+import TransferRequestPage from './pages/TransferRequest';
 
 function App() {
   const [loading, setLoading] = useState<boolean>(true);
@@ -187,6 +188,15 @@ function App() {
                 <>
                   <PageTitle title="Engineers" />
                   <Engineers />
+                </>
+              }
+            />
+            <Route
+              path="/transfer-requests"
+              element={
+                <>
+                  <PageTitle title="Transfer Requests" />
+                  <TransferRequestPage />
                 </>
               }
             />

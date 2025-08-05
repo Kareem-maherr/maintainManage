@@ -52,7 +52,6 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
   });
 
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [responsibleEngineers, setResponsibleEngineers] = useState<Array<{ id: string; email: string; name: string }>>([]);
   const [isEngineer, setIsEngineer] = useState(false);
   const [engineerCompanies, setEngineerCompanies] = useState<string[]>([]);
@@ -121,7 +120,6 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
         setResponsibleEngineers(engineersList);
       } catch (error) {
         console.error('Error fetching user data:', error);
-        setError('Failed to load user data');
       }
     };
 
@@ -131,10 +129,16 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
   // Filter companies based on search term
   useEffect(() => {
     if (isEngineer && engineerCompanies.length > 0) {
-      const filtered = engineerCompanies.filter(company => 
-        company.toLowerCase().includes(companySearchTerm.toLowerCase())
-      );
-      setFilteredCompanies(filtered);
+      if (companySearchTerm.trim() === '') {
+        // Show all companies when search term is empty
+        setFilteredCompanies(engineerCompanies);
+      } else {
+        // Filter companies based on search term
+        const filtered = engineerCompanies.filter(company => 
+          company.toLowerCase().includes(companySearchTerm.toLowerCase())
+        );
+        setFilteredCompanies(filtered);
+      }
     }
   }, [companySearchTerm, engineerCompanies, isEngineer]);
   

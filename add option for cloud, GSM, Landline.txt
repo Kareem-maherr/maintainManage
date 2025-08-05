@@ -1,0 +1,2 @@
+add option for cloud, GSM, Landline, Connectivity
+Add scalacility options

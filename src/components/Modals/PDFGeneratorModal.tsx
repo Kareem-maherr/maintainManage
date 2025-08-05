@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { generateTicketsPDF } from '../PDFGenerator/TicketsPDFGenerator';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import { BsFilePdf } from 'react-icons/bs';
 
 interface PDFGeneratorModalProps {
   onClose: () => void;
@@ -181,18 +182,21 @@ const PDFGeneratorModal: React.FC<PDFGeneratorModalProps> = ({ onClose }) => {
               type="button"
               onClick={handleGeneratePDF}
               disabled={generating}
-              className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90 disabled:bg-opacity-50"
+              className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-3 sm:px-6 text-white hover:bg-opacity-90 disabled:bg-opacity-50"
             >
               {generating ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin h-5 w-5 sm:mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Generating...
+                  <span className="hidden sm:inline">Generating...</span>
                 </>
               ) : (
-                'Generate PDF'
+                <>
+                  <BsFilePdf className="h-5 w-5 sm:mr-2" />
+                  <span className="hidden sm:inline">Generate PDF</span>
+                </>
               )}
             </button>
           </div>

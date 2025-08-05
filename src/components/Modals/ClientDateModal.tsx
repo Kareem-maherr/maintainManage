@@ -193,7 +193,8 @@ const ClientDateModal: React.FC<ClientDateModalProps> = ({
           leadEngineer: team.leadEngineer || '',
           responsibleEngineer: '',
           isClientVisit: true,
-          displayDate: format(startDate, "dd/MM/yyyy")
+          displayDate: format(startDate, "dd/MM/yyyy"),
+          event_type: 'single' // Client visit events are single type
         };
 
         const docRef = await addDoc(eventsCollection, newEvent);

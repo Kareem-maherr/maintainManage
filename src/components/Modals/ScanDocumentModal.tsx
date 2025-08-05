@@ -45,7 +45,8 @@ const ScanDocumentModal = ({ isOpen, onClose }: ScanDocumentModalProps) => {
           responsibleEngineer: event.responsibleEngineer || '',
           projectName: event.projectName || '',
           createdAt: Timestamp.now(),
-          resolved: false
+          resolved: false,
+          event_type: 'single' // Scanned document events are single type
         };
 
         // Add to Firestore

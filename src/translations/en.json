@@ -18,6 +18,7 @@
     },
     "tickets": {
       "recentOpenTickets": "Recent Open Tickets",
+      "noRecentOpenTickets": "No recent open tickets",
       "viewMore": "View More",
       "table": {
         "title": "Title",
@@ -36,6 +37,7 @@
       "yourTicketsThisWeek": "Tickets This Week",
       "last12Months": "Last 12 months",
       "ticketsThisWeek": "Tickets this week",
+      "ticketsLastYear": "Tickets last year",
       "timeFilter": {
         "thisWeek": "This Week",
         "lastWeek": "Last Week"
@@ -85,15 +87,15 @@
     "projectList": "Project List",
     "title": "Clients",
     "addNewClient": "Add New Client",
-    "cancel": "Cancel",
+    "cancel": "Cancel", 
     "clientNames": {
-      "Arab Emergency": "Arab Emergency",
-      "Dr. Suliman Al Habib": "Dr. Suliman Al Habib",
       "Agility": "Agility",
-      "Prime Gate": "Prime Gate",
-      "Al Inma Bank": "Al Inma Bank",
-      "Jarir Bookstore": "Jarir Bookstore",
-      "Dusman Ajnan Mall": "Dusman Ajnan Mall"
+      "SACO Western": "SACO Western",
+      "Alsalhya": "Alsalhya",
+      "Alfanar": "Alfanar",
+      "Dr Sulaiman Al-Habib": "Dr Sulaiman Al-Habib",
+      "Superuser": "Superuser",
+      "undefined": "Client"
     }
   },
   "engineers": {
@@ -135,13 +137,17 @@
       "noDescription": "No description"
     },
     "engineerNames": {
-      "Ragheb": "Ragheb",
-      "Mohammed": "Mohammed",
-      "Rawan": "Rawan",
-      "Abdulaziz": "Abdulaziz",
-      "Farahat": "Farahat",
-      "Hossam": "Hossam",
-      "admin": "Admin"
+      "Abdulrahman": "Abdulrahman",
+      "Abdulrahman Al-Najjar": "Abdulrahman Al-Najjar",
+      "Portgas D. Ace": "SuperUser",
+      "Farahat Khan": "Farahat Khan",
+      "Admin": "Admin",
+      "Abdelaziz Ibrahim": "Abdelaziz Ibrahim",
+      "Mohammed Al-Balawy": "Mohammed Al-Balawy",
+      "Assem Al-tamimi": "Assem Al-tamimi",
+      "Moaz Ibrahim": "Moaz Ibrahim",
+      "Abdelrahman Mostafa": "Abdelrahman Mostafa"
+
     }
   },
   "calendar": {
@@ -187,7 +193,8 @@
     "status": {
       "open": "Open",
       "inprogress": "In Progress",
-      "resolved": "Resolved"
+      "resolved": "Resolved",
+      "transferred": "Transferred"
     },
     "allTickets": "All Tickets",
     "overview": "Overview of all tickets and their status",
@@ -221,7 +228,9 @@
       "assignedTo": "Engineer",
       "unassigned": "Unassigned",
       "dateSet": "Set",
-      "dateNotSet": "Not Set"
+      "dateNotSet": "Not Set",
+      "days": "days",
+      "ago": "ago"
     },
     "timeElapsed": {
       "days": "day",

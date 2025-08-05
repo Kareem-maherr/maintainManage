@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import Calendar from 'react-calendar';
-import { collection, getDocs, addDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, updateDoc, query, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import { getAuth } from 'firebase/auth';
 import 'react-calendar/dist/Calendar.css';
 
 interface Team {
@@ -9,23 +10,32 @@ interface Team {
   name: string;
   leadEngineer: string;
   projectManager: string;
+  supervisor?: string;
+  supervisorEmail?: string;
+  team_engineer?: string;
 }
 
 interface SetDateModalProps {
   isOpen: boolean;
   onClose: () => void;
-  ticket: any;
+  tickets: any[];
 }
 
-const SetDateModal = ({ isOpen, onClose, ticket }: SetDateModalProps) => {
+const SetDateModal = ({ isOpen, onClose, tickets }: SetDateModalProps) => {
   const [date, setDate] = useState<Date | null>(new Date());
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<string>('');
+  const auth = getAuth();
+  const currentUserEmail = auth.currentUser?.email;
 
   useEffect(() => {
     const fetchTeams = async () => {
+      if (!currentUserEmail) return;
+      
       const teamsCollection = collection(db, 'teams');
-      const teamsSnapshot = await getDocs(teamsCollection);
+      // Filter teams where team_engineer equals the current user's email
+      const q = query(teamsCollection, where('team_engineer', '==', currentUserEmail));
+      const teamsSnapshot = await getDocs(q);
       const teamsData = teamsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -34,10 +44,10 @@ const SetDateModal = ({ isOpen, onClose, ticket }: SetDateModalProps) => {
     };
 
     fetchTeams();
-  }, []);
+  }, [currentUserEmail]);
 
   const handleSave = async () => {
-    if (!date || !selectedTeam) return;
+    if (!date || !selectedTeam || tickets.length === 0) return;
 
     const selectedTeamData = teams.find(team => team.id === selectedTeam);
     if (!selectedTeamData) return;
@@ -46,32 +56,75 @@ const SetDateModal = ({ isOpen, onClose, ticket }: SetDateModalProps) => {
     endDate.setDate(endDate.getDate() + 1); // Default to 1-day event
 
     try {
+      // Create a group event title
+      const groupTitle = tickets.length === 1 
+        ? tickets[0].title || 'Untitled Event'
+        : `Group Event - ${tickets.length} Tickets`;
+
+      // Combine locations from all tickets
+      const locations = [...new Set(tickets.map(ticket => ticket.location).filter(Boolean))];
+      const combinedLocation = locations.join(', ') || 'Unknown Location';
+
+      // Combine companies from all tickets
+      const companies = [...new Set(tickets.map(ticket => ticket.company).filter(Boolean))];
+      const combinedCompany = companies.join(', ') || 'Unknown Project';
+
+      // Get ticket IDs
+      const ticketIds = tickets.map(ticket => ticket.id);
+
       const eventData = {
-        title: ticket.title || 'Untitled Event',
+        title: groupTitle,
         startDate: date,
         endDate: endDate,
         teamName: selectedTeamData.name || 'Unknown Team',
-        projectName: ticket.projectName || 'Unknown Project',
+        projectName: combinedCompany,
         projectManager: selectedTeamData.projectManager || 'Unassigned',
         leadEngineer: selectedTeamData.leadEngineer || 'Unassigned',
-        location: 'Remote',
-        ticketId: ticket.id,
-        createdAt: new Date()
+        location: combinedLocation,
+        ticketIds: ticketIds, // Array of ticket IDs
+        ticketCount: tickets.length,
+        event_type: tickets.length === 1 ? 'single' : 'group', // Track event type
+        responsibleEngineer: currentUserEmail || '',
+        supervisorEmail: selectedTeamData.supervisorEmail || '',
+        createdAt: new Date(),
+        // Add combined ticket information
+        tickets: tickets.map(ticket => ({
+          id: ticket.id,
+          title: ticket.title,
+          company: ticket.company,
+          location: ticket.location,
+          severity: ticket.severity,
+          status: ticket.status,
+          noteStatus: ticket.noteStatus
+        }))
       };
 
-      // Create the event
+      // Create the group event
       await addDoc(collection(db, 'events'), eventData);
 
-      // Update the ticket with the date and isDateSet flag
-      const ticketRef = doc(db, 'tickets', ticket.id);
-      await updateDoc(ticketRef, {
-        date: date,
-        isDateSet: true
+      // Update all tickets with the date, isDateSet flag, responsible engineer, and supervisor email
+      const updatePromises = tickets.map(ticket => {
+        const ticketRef = doc(db, 'tickets', ticket.id);
+        const updateData: any = {
+          date: date,
+          isDateSet: true,
+          supervisor_email: selectedTeamData.supervisorEmail || ''
+        };
+        
+        // Only update responsible_engineer if the ticket is not transferred
+        // If ticket has transfer_engineer, preserve the original responsible_engineer
+        if (!ticket.transfer_engineer) {
+          updateData.responsible_engineer = currentUserEmail || '';
+        }
+        
+        return updateDoc(ticketRef, updateData);
       });
+
+      await Promise.all(updatePromises);
 
       onClose();
     } catch (error) {
-      console.error('Error creating event:', error);
+      console.error('Error creating group event:', error);
     }
   };
 
@@ -82,7 +135,7 @@ const SetDateModal = ({ isOpen, onClose, ticket }: SetDateModalProps) => {
       <div className="w-full max-w-lg rounded-sm border border-stroke bg-white p-5 shadow-default dark:border-strokedark dark:bg-boxdark">
         <div className="mb-5 flex items-center justify-between">
           <h3 className="font-medium text-black dark:text-white">
-            Set Event Date
+            {tickets.length === 1 ? 'Set Event Date' : `Create Group Event (${tickets.length} tickets)`}
           </h3>
           <button onClick={onClose}>
             <svg
@@ -122,7 +175,13 @@ const SetDateModal = ({ isOpen, onClose, ticket }: SetDateModalProps) => {
 
         <div className="mb-5 flex justify-center">
           <Calendar
-            onChange={setDate}
+            onChange={(value) => {
+              if (value instanceof Date) {
+                setDate(value);
+              } else if (Array.isArray(value) && value[0] instanceof Date) {
+                setDate(value[0]);
+              }
+            }}
             value={date}
             className="custom-calendar"
             minDate={new Date()}

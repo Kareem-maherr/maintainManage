@@ -4,7 +4,6 @@ import {
   query,
   orderBy,
   getDocs,
-  Timestamp,
   doc,
   updateDoc,
   where,
@@ -15,6 +14,7 @@ import { getAuth } from 'firebase/auth';
 import Breadcrumb from '../components/Breadcrumbs/Breadcrumb';
 import FilterTicketsModal from '../components/Modals/FilterTicketsModal';
 import PDFGenerator from '../components/PDFGenerator/PDFGenerator';
+import EventDetailsModal from '../components/Modals/EventDetailsModal';
 
 interface CalendarEvent {
   id: string;
@@ -27,24 +27,61 @@ interface CalendarEvent {
   projectManager?: string;
   location?: string;
   responsibleEngineer?: string;
+  status?: string;
+  reportUrl?: string;
+  resolvedAt?: any;
+  resolvedBy?: string;
   resolved?: boolean;
+  // Group event fields
+  event_type?: 'single' | 'group';
+  tickets?: {
+    id: string;
+    title: string;
+    company: string;
+    location: string;
+    severity: string;
+    status: string;
+    noteStatus?: string;
+    reportUrl?: string;
+    reportUploadedAt?: any;
+  }[];
+  ticketIds?: string[];
+  ticketCount?: number;
+  lastUpdated?: any;
+  supervisorEmail?: string;
+  leadEngineer?: string;
+  email?: string;
+  phone?: string;
+  teamMembers?: { name: string }[];
+  ticketId?: string;
+  eventId?: string;
 }
 
 const statusColors: { [key: string]: string } = {
-  Open: 'bg-blue-100 text-blue-800',
-  Resolved: 'bg-purple-100 text-purple-800',
+  'Resolved': 'bg-green-100 text-green-800 border border-green-300 font-medium',
+  'In Progress': 'bg-blue-50 text-blue-700',
+  'Quotation Sent': 'bg-yellow-50 text-yellow-700',
+  'Material Not Complete': 'bg-orange-50 text-orange-700',
+  'No status': 'bg-gray-50 text-gray-600',
 };
 
 const CalendarTickets = () => {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isEngineer, setIsEngineer] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [, setIsEngineer] = useState(false);
+  const [, setUserEmail] = useState<string | null>(null);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [isEventDetailsModalOpen, setIsEventDetailsModalOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [activeFilters, setActiveFilters] = useState({
     status: 'all',
-    engineer: 'all'
+    engineer: 'all',
+    statusOptions: ['In Progress', 'Quotation Sent', 'Material Not Complete', 'Material Complete', 'No status']
+  } as {
+    status: string;
+    engineer: string;
+    statusOptions: string[];
   });
   const auth = getAuth();
 
@@ -105,10 +142,33 @@ const CalendarTickets = () => {
           console.log('Event data:', data);
           return {
             id: doc.id,
-            ...data,
+            title: data.title || '',
+            teamName: data.teamName || '',
+            projectId: data.projectId || '',
+            projectName: data.projectName || '',
+            projectManager: data.projectManager,
+            location: data.location,
+            responsibleEngineer: data.responsibleEngineer,
+            status: data.status || 'No status',
+            reportUrl: data.reportUrl,
+            resolvedAt: data.resolvedAt,
+            resolvedBy: data.resolvedBy,
             startDate: data.startDate.toDate(),
             endDate: data.endDate.toDate(),
-            resolved: data.resolved || false,
+            // Group event fields
+            event_type: data.event_type,
+            tickets: data.tickets,
+            ticketIds: data.ticketIds,
+            ticketCount: data.ticketCount,
+            lastUpdated: data.lastUpdated,
+            supervisorEmail: data.supervisorEmail,
+            leadEngineer: data.leadEngineer,
+            email: data.email || '',
+            phone: data.phone || '',
+            teamMembers: data.teamMembers,
+            resolved: data.resolved,
+            ticketId: data.ticketId,
+            eventId: data.eventId
           } as CalendarEvent;
         });
         setEvents(eventsData);
@@ -124,7 +184,7 @@ const CalendarTickets = () => {
   }, [auth.currentUser]);
 
   const getEventStatus = (event: CalendarEvent) => {
-    return event.resolved ? 'Resolved' : 'Open';
+    return event.status || 'No status';
   };
 
   const formatDate = (date: Date) => {
@@ -168,20 +228,31 @@ const CalendarTickets = () => {
           event.id === eventId ? { ...event, resolved: true } : event,
         ),
       );
+      
+      // Update filtered events as well
+      setFilteredEvents((prevEvents) =>
+        prevEvents.map((event) =>
+          event.id === eventId ? { ...event, resolved: true } : event,
+        ),
+      );
     } catch (error) {
       console.error('Error resolving event:', error);
     }
   };
+  
+  const handleEventClick = (event: CalendarEvent) => {
+    setSelectedEvent(event);
+    setIsEventDetailsModalOpen(true);
+  };
 
   const applyFilters = ({ status, engineer }: { status: string; engineer: string }) => {
-    setActiveFilters({ status, engineer });
+    setActiveFilters(prev => ({ ...prev, status, engineer }));
     
     let filtered = [...events];
     
     // Apply status filter
     if (status !== 'all') {
-      const isResolved = status === 'Resolved';
-      filtered = filtered.filter(event => event.resolved === isResolved);
+      filtered = filtered.filter(event => (event.status || 'No status') === status);
     }
     
     // Apply engineer filter
@@ -252,13 +323,12 @@ const CalendarTickets = () => {
                 <th className="p-2.5 xl:p-5">Duration</th>
                 <th className="p-2.5 xl:p-5">Location</th>
                 <th className="p-2.5 xl:p-5">Status</th>
-                <th className="p-2.5 xl:p-5">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredEvents.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-gray-400">
+                  <td colSpan={7} className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-gray-400">
                     <svg
                       className="w-16 h-16 mb-4 text-gray-300"
                       fill="none"
@@ -277,7 +347,7 @@ const CalendarTickets = () => {
                   </td>
                 </tr>
               ) : (
-                filteredEvents.map((event, index) => {
+                filteredEvents.map((event) => {
                   const status = getEventStatus(event);
                   const duration = Math.ceil(
                     (event.endDate.getTime() - event.startDate.getTime()) /
@@ -285,7 +355,11 @@ const CalendarTickets = () => {
                   );
 
                   return (
-                    <tr key={event.id} className="border-b border-stroke dark:border-strokedark">
+                    <tr 
+                      key={event.id} 
+                      className="border-b border-stroke dark:border-strokedark hover:bg-gray-50 dark:hover:bg-meta-4 cursor-pointer transition-colors duration-150"
+                      onClick={() => handleEventClick(event)}
+                    >
                       <td className="p-2.5 xl:p-5">
                         <div className="flex flex-col">
                           <span className="font-medium text-black dark:text-white">
@@ -373,40 +447,18 @@ const CalendarTickets = () => {
                       </td>
                       <td className="p-2.5 xl:p-5">
                         <span
-                          className={`inline-flex items-center gap-1.5 rounded-full py-1.5 px-4 text-sm font-medium ${statusColors[status]}`}
+                          className={`inline-flex items-center gap-2 rounded-full py-1.5 px-4 text-sm font-medium ${statusColors[status] || 'bg-gray-50 text-gray-600'}`}
                         >
                           <span
                             className={`h-2 w-2 rounded-full ${
-                              status === 'Resolved'
-                                ? 'bg-purple-500'
-                                : 'bg-blue-500'
+                              status === 'Resolved' ? 'bg-green-500' :
+                              status === 'In Progress' ? 'bg-blue-500' :
+                              status === 'Quotation Sent' ? 'bg-yellow-500' :
+                              status === 'Material Not Complete' ? 'bg-orange-500' : 'bg-gray-500'
                             }`}
                           ></span>
                           {status}
                         </span>
-                      </td>
-                      <td className="p-2.5 xl:p-5">
-                        {!event.resolved && (
-                          <button
-                            onClick={() => handleResolveClick(event.id)}
-                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-sm font-medium text-green-700 bg-green-100 hover:bg-green-200 transition-colors duration-200"
-                          >
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
-                            Resolve
-                          </button>
-                        )}
                       </td>
                     </tr>
                   );
@@ -422,6 +474,38 @@ const CalendarTickets = () => {
         onApplyFilters={applyFilters}
         events={filteredEvents}
       />
+      
+      {selectedEvent && (
+        <EventDetailsModal
+          isOpen={isEventDetailsModalOpen}
+          onClose={() => {
+            setIsEventDetailsModalOpen(false);
+            // Refresh the events list when the modal is closed to reflect any changes
+            const updatedEvents = [...events];
+            setEvents(updatedEvents);
+            
+            // Apply current filters to the updated events
+            applyFilters(activeFilters);
+          }}
+          event={{
+            id: selectedEvent.id,
+            title: selectedEvent.title,
+            projectName: selectedEvent.projectName,
+            projectManager: selectedEvent.projectManager || 'N/A',
+            location: selectedEvent.location || 'Remote',
+            email: 'contact@example.com', // Placeholder, replace with actual data if available
+            phone: 'N/A', // Placeholder, replace with actual data if available
+            startDate: selectedEvent.startDate,
+            endDate: selectedEvent.endDate,
+            teamName: selectedEvent.teamName,
+            responsibleEngineer: selectedEvent.responsibleEngineer,
+            status: selectedEvent.status || 'No status',
+            reportUrl: selectedEvent.reportUrl,
+            resolvedAt: selectedEvent.resolvedAt,
+            resolvedBy: selectedEvent.resolvedBy
+          }}
+        />
+      )}
     </>
   );
 };

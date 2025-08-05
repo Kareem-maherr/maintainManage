@@ -29,6 +29,7 @@
       "resolvedTickets": "التذاكر المحلولة",
       "closedTickets": "التذاكر المغلقة",
       "last12Months": "آخر 12 شهر",
+      "ticketsLastYear": "تذاكر السنة الماضية",
       "ticketsThisWeek": "تذاكر هذا الأسبوع",
       "timeFilter": {
         "thisWeek": "هذا الأسبوع",
@@ -47,7 +48,7 @@
     "engineers": "المهندسين",
     "tickets": "التذاكر",
     "scheduledTickets": "التذاكر المجدولة",
-    "emergencyTickets": "تذاكر الطوارئ",
+    "emergencyTickets": "التذاكر الطارئة",
     "clientList": "قائمة العملاء"
   },
   "common": {
@@ -81,17 +82,18 @@
     "addNewClient": "إضافة عميل جديد",
     "cancel": "إلغاء",
     "clientNames": {
-      "Arab Emergency": "الطوارئ العربية",
-      "Dr. Suliman Al Habib": "دكتور سليمان الحبيب",
-      "Jarir Bookstore": "مكتبة جرير",
       "Agility": "اجيليتي",
-      "Al Inma Bank": "مصرف الانماء",
-      "Prime Gate": "البوابة الرئيسية"
+      "SACO Western": "ساكو الغربية",
+      "Alsalhya": "الصالحية",
+      "Alfanar": "الفنار",
+      "Dr Sulaiman Al-Habib": "د سليمان الحبيب",
+      "Superuser": "سوبر ادمن",
+      "undefined": "عميل"
     }
   },
   "engineers": {
     "title": "المهندسين",
-    "loading": "جاري التحميل...",
+    "loading": "جاري التحميل....",
     "noEngineers": "لم يتم العثور على مهندسين.",
     "email": "البريد الإلكتروني",
     "role": {
@@ -128,13 +130,16 @@
       "noDescription": "لا يوجد وصف"
     },
     "engineerNames": {
-      "Ragheb": "راغب",
-      "Mohammed": "محمد",
-      "Rawan": "روان",
-      "Abdulaziz": "عبدالعزيز",
-      "Farahat": "فراحات",
-      "Hossam": "حسام",
-      "admin": "admin"
+      "Abdulrahman": "عبد الرحمن",
+      "Abdulrahman Al-Najjar": "عبدالرحمن النجار",
+      "Portgas D. Ace": "سوبر ادمن",
+      "Farahat Khan": "فرحات خان",
+      "Admin": "امين",
+      "Abdelaziz Ibrahim": "عبدالعزيز اراهيم",
+      "Mohammed Al-Balawy": "محمد البلوي",
+      "Assem Al-tamimi": "عاصم التميمي",
+      "Moaz Ibrahim": "معاذ ابراهيم",
+      "Abdelrahman Mostafa": "عبدالرحمن مصطفى"
     }
   },
   "calendar": {

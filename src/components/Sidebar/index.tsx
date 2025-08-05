@@ -11,6 +11,7 @@ import {
   faTable,
   faUser,
   faUsersGear,
+  faExchangeAlt,
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -173,6 +174,18 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                 </NavLink>
               </li>
 
+              <li>
+                <NavLink
+                  to="/transfer-requests"
+                  className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
+                    pathname.includes('transfer-requests') && 'bg-graydark dark:bg-meta-4'
+                  }`}
+                >
+                  <FontAwesomeIcon icon={faExchangeAlt} className="h-5 w-5" />
+                  Transfer Requests
+                </NavLink>
+              </li>
+
               <li className="my-3 h-px bg-gray-700"></li>
 
               <li>
@@ -187,35 +200,33 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                 </NavLink>
               </li>
 
+              <li className="my-3 h-px bg-gray-700"></li>
+
+              <li>
+                <NavLink
+                  to="/teams"
+                  className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
+                    pathname.includes('teams') && 'bg-graydark dark:bg-meta-4'
+                  }`}
+                >
+                  <FontAwesomeIcon icon={faUsers} className="h-5 w-5" />
+                  {t('navigation.teams')}
+                </NavLink>
+              </li>
+
               {isAdmin && (
-                <>
-                  <li className="my-3 h-px bg-gray-700"></li>
-
-                  <li>
-                    <NavLink
-                      to="/teams"
-                      className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
-                        pathname.includes('teams') && 'bg-graydark dark:bg-meta-4'
-                      }`}
-                    >
-                      <FontAwesomeIcon icon={faUsers} className="h-5 w-5" />
-                      {t('navigation.teams')}
-                    </NavLink>
-                  </li>
-
-                  <li>
-                    <NavLink
-                      to="/engineers"
-                      className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
-                        pathname.includes('engineers') &&
-                        'bg-graydark dark:bg-meta-4'
-                      }`}
-                    >
-                      <FontAwesomeIcon icon={faUsersGear} className="h-5 w-5" />
-                      {t('navigation.engineers')}
-                    </NavLink>
-                  </li>
-                </>
+                <li>
+                  <NavLink
+                    to="/engineers"
+                    className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
+                      pathname.includes('engineers') &&
+                      'bg-graydark dark:bg-meta-4'
+                    }`}
+                  >
+                    <FontAwesomeIcon icon={faUsersGear} className="h-5 w-5" />
+                    {t('navigation.engineers')}
+                  </NavLink>
+                </li>
               )}
             </ul>
           </div>

@@ -3,6 +3,7 @@ import { collection, onSnapshot, query, where, Timestamp, orderBy, Query } from 
 import { db } from '../../config/firebase';
 import TicketDetailsModal from '../Modals/TicketDetailsModal';
 import NewTicketModal from '../Modals/NewTicketModal';
+import { BsPlusLg, BsXLg } from 'react-icons/bs';
 
 interface FullTicket {
   id: string;
@@ -234,15 +235,17 @@ const FullTicketList = () => {
       <div className="mb-4 flex justify-between items-center">
         <button
           onClick={() => setShowNewTicketModal(true)}
-          className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-white hover:bg-opacity-90"
+          className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-3 sm:px-6 text-white hover:bg-opacity-90"
         >
-          Create New Ticket
+          <BsPlusLg className="h-5 w-5 sm:mr-2" />
+          <span className="hidden sm:inline">Create New Ticket</span>
         </button>
         <button
           onClick={clearFilters}
-          className="inline-flex items-center justify-center rounded-md border border-stroke py-2 px-6 text-center font-medium text-black hover:bg-opacity-90 dark:border-strokedark dark:text-white"
+          className="inline-flex items-center justify-center rounded-md border border-stroke py-2 px-3 sm:px-6 text-center font-medium text-black hover:bg-opacity-90 dark:border-strokedark dark:text-white"
         >
-          Clear Filters
+          <BsXLg className="h-5 w-5 sm:mr-2" />
+          <span className="hidden sm:inline">Clear Filters</span>
         </button>
       </div>
 

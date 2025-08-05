@@ -4,6 +4,7 @@ import { getAuth } from 'firebase/auth';
 import { db } from '../../config/firebase';
 import { NavLink } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
+import noTicketsIcon from '../../images/empty-state/no-tickets.svg';
 
 interface Ticket {
   id: string;
@@ -146,76 +147,87 @@ const DashboardTicketList = ({ onViewMore }: TableOneProps) => {
       </div>
 
       <div className="flex flex-col">
-        <div className="grid grid-cols-3 rounded-sm bg-gray-2 dark:bg-meta-4 sm:grid-cols-7">
-          <div className="p-2.5 xl:p-5">
-            <h5 className="text-sm font-medium uppercase xsm:text-base">ID</h5>
-          </div>
-          <div className="p-2.5 xl:p-5">
-            <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.title')}</h5>
-          </div>
-          <div className="p-2.5 text-center xl:p-5">
-            <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.company')}</h5>
-          </div>
-          <div className="p-2.5 text-center xl:p-5">
-            <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.location')}</h5>
-          </div>
-          <div className="hidden p-2.5 text-center sm:block xl:p-5">
-            <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.date')}</h5>
-          </div>
-          <div className="hidden p-2.5 text-center sm:block xl:p-5">
-            <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.severity')}</h5>
-          </div>
-          <div className="hidden p-2.5 text-center sm:block xl:p-5">
-            <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.status')}</h5>
-          </div>
-        </div>
+        {tickets.length > 0 ? (
+          <>
+            <div className="grid grid-cols-3 rounded-sm bg-gray-2 dark:bg-meta-4 sm:grid-cols-7">
+              <div className="p-2.5 xl:p-5">
+                <h5 className="text-sm font-medium uppercase xsm:text-base">ID</h5>
+              </div>
+              <div className="p-2.5 xl:p-5">
+                <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.title')}</h5>
+              </div>
+              <div className="p-2.5 text-center xl:p-5">
+                <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.company')}</h5>
+              </div>
+              <div className="p-2.5 text-center xl:p-5">
+                <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.location')}</h5>
+              </div>
+              <div className="hidden p-2.5 text-center sm:block xl:p-5">
+                <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.date')}</h5>
+              </div>
+              <div className="hidden p-2.5 text-center sm:block xl:p-5">
+                <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.severity')}</h5>
+              </div>
+              <div className="hidden p-2.5 text-center sm:block xl:p-5">
+                <h5 className="text-sm font-medium uppercase xsm:text-base">{t('dashboard.tickets.table.status')}</h5>
+              </div>
+            </div>
 
-        {tickets.map((ticket, key) => (
-          <div
-            className={`grid grid-cols-3 sm:grid-cols-7 ${
-              key === tickets.length - 1
-                ? ''
-                : 'border-b border-stroke dark:border-strokedark'
-            }`}
-            key={ticket.id}
-          >
-            <div className="flex items-center gap-3 p-2.5 xl:p-5">
-              <p className="text-meta-5">
-                {ticket.readableId}
-              </p>
-            </div>
-            <div className="flex items-center gap-3 p-2.5 xl:p-5">
-              <p className="text-black dark:text-white">
-                {ticket.title}
-              </p>
-            </div>
-            <div className="flex items-center justify-center p-2.5 xl:p-5">
-              <p className="text-black dark:text-white">
-                {ticket.company}
-              </p>
-            </div>
-            <div className="flex items-center justify-center p-2.5 xl:p-5">
-              <p className="text-black dark:text-white">
-                {ticket.location}
-              </p>
-            </div>
-            <div className="hidden items-center justify-center p-2.5 sm:flex xl:p-5">
-              <p className="text-black dark:text-white">
-                {ticket.date}
-              </p>
-            </div>
-            <div className="hidden items-center justify-center p-2.5 sm:flex xl:p-5">
-              <span className={`rounded-full px-3 py-1 text-sm font-medium ${priorityStyles[ticket.severity]}`}>
-                {ticket.severity}
-              </span>
-            </div>
-            <div className="hidden items-center justify-center p-2.5 sm:flex xl:p-5">
-              <span className={`rounded-full px-3 py-1 text-sm font-medium ${statusStyles[ticket.status]}`}>
-                {ticket.status}
-              </span>
-            </div>
+            {tickets.map((ticket, key) => (
+              <div
+                className={`grid grid-cols-3 sm:grid-cols-7 ${
+                  key === tickets.length - 1
+                    ? ''
+                    : 'border-b border-stroke dark:border-strokedark'
+                }`}
+                key={ticket.id}
+              >
+                <div className="flex items-center gap-3 p-2.5 xl:p-5">
+                  <p className="text-meta-5">
+                    {ticket.readableId}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 p-2.5 xl:p-5">
+                  <p className="text-black dark:text-white">
+                    {ticket.title}
+                  </p>
+                </div>
+                <div className="flex items-center justify-center p-2.5 xl:p-5">
+                  <p className="text-black dark:text-white">
+                    {ticket.company}
+                  </p>
+                </div>
+                <div className="flex items-center justify-center p-2.5 xl:p-5">
+                  <p className="text-black dark:text-white">
+                    {ticket.location}
+                  </p>
+                </div>
+                <div className="hidden items-center justify-center p-2.5 sm:flex xl:p-5">
+                  <p className="text-black dark:text-white">
+                    {ticket.date}
+                  </p>
+                </div>
+                <div className="hidden items-center justify-center p-2.5 sm:flex xl:p-5">
+                  <span className={`rounded-full px-3 py-1 text-sm font-medium ${priorityStyles[ticket.severity]}`}>
+                    {ticket.severity}
+                  </span>
+                </div>
+                <div className="hidden items-center justify-center p-2.5 sm:flex xl:p-5">
+                  <span className={`rounded-full px-3 py-1 text-sm font-medium ${statusStyles[ticket.status]}`}>
+                    {ticket.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-12">
+            <img src={noTicketsIcon} alt="No tickets" className="w-24 h-24 mb-4" />
+            <p className="text-lg font-medium text-black dark:text-white">
+              {t('dashboard.tickets.noRecentOpenTickets') || 'No recent open tickets'}
+            </p>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

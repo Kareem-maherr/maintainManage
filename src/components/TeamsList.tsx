@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react';
 import { db } from '../config/firebase';
-import { collection, addDoc, onSnapshot, query, updateDoc, doc } from 'firebase/firestore';
+import {
+  collection,
+  addDoc,
+  onSnapshot,
+  query,
+  updateDoc,
+  doc,
+  where,
+} from 'firebase/firestore';
 import { Cog6ToothIcon } from '@heroicons/react/24/outline';
 
 interface TeamMember {
@@ -11,36 +19,93 @@ interface TeamMember {
 
 interface Team {
   id: string;
+  name: string;
   supervisor?: string;
   members: TeamMember[];
   createdAt?: any;
+  team_engineer?: string;
 }
 
-const TeamsList = () => {
+interface TeamsListProps {
+  isAdmin: boolean;
+  userEmail: string;
+  filterByEngineer?: string;
+}
+
+const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps) => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
+  const [engineers, setEngineers] = useState<{id: string; email: string; displayName: string}[]>([]);
   const [memberCount, setMemberCount] = useState('');
   const [memberNames, setMemberNames] = useState<string[]>([]);
   const [supervisor, setSupervisor] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('TeamsList - User Email:', userEmail);
+    console.log('TeamsList - Is Admin:', isAdmin);
+    console.log('TeamsList - Filter By Engineer:', filterByEngineer);
+    
     const teamsRef = collection(db, 'teams');
-    const q = query(teamsRef);
+    
+    // Query logic based on user role and filter
+    let q;
+    
+    if (!isAdmin) {
+      // If not admin, only show teams assigned to the user
+      q = query(teamsRef, where('team_engineer', '==', userEmail));
+      console.log('TeamsList - Query Condition: Non-admin, teams assigned to user');
+    } else if (filterByEngineer && filterByEngineer.trim() !== '') {
+      // If admin and filter is active, show teams for that engineer
+      q = query(teamsRef, where('team_engineer', '==', filterByEngineer));
+      console.log(`TeamsList - Query Condition: Admin, filtered by engineer ${filterByEngineer}`);
+    } else {
+      // If admin and no filter, show all teams
+      q = query(teamsRef);
+      console.log('TeamsList - Query Condition: Admin, all teams');
+    }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const teamsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Team[];
-      
+      const teamsData = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        console.log('TeamsList - Team Data:', doc.id, data);
+        return {
+          id: doc.id,
+          ...data,
+        };
+      }) as Team[];
+
+      console.log('TeamsList - Teams Count:', teamsData.length);
+      console.log('TeamsList - Teams Data:', teamsData);
       setTeams(teamsData);
       setLoading(false);
     });
+    
+    // Clean up subscription when component unmounts
+    return () => {
+      unsubscribe();
+    };
+  }, [isAdmin, userEmail, filterByEngineer]);
+  
+  // Separate useEffect for engineers data
+  useEffect(() => {
+    // Fetch engineers for cross-referencing emails with displayNames
+    const engineersRef = collection(db, 'engineers');
+    const engineersUnsubscribe = onSnapshot(query(engineersRef), (snapshot) => {
+      const engineersData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      console.log('TeamsList - Engineers data:', engineersData);
+      setEngineers(engineersData as any);
+    });
 
-    return () => unsubscribe();
+    // Clean up subscription when component unmounts
+    return () => {
+      engineersUnsubscribe();
+    };
   }, []);
 
   const handleCreateTeam = async () => {
@@ -49,13 +114,13 @@ const TeamsList = () => {
     try {
       const newTeam = {
         name: `${supervisor.trim()}'s Team`,
-        members: memberNames.map(name => ({ 
+        members: memberNames.map((name) => ({
           name: name.trim(),
           email: '',
-          role: 'member'
+          role: 'member',
         })),
         supervisor: supervisor.trim(),
-        createdAt: new Date()
+        createdAt: new Date(),
       };
 
       await addDoc(collection(db, 'teams'), newTeam);
@@ -71,7 +136,7 @@ const TeamsList = () => {
   const handleEditTeam = (team: Team) => {
     setEditingTeam(team);
     setSupervisor(team.supervisor || '');
-    setMemberNames(team.members.map(member => member.name));
+    setMemberNames(team.members.map((member) => member.name));
     setIsEditModalOpen(true);
   };
 
@@ -81,12 +146,12 @@ const TeamsList = () => {
     try {
       const updatedTeam = {
         name: `${supervisor.trim()}'s Team`,
-        members: memberNames.map(name => ({ 
+        members: memberNames.map((name) => ({
           name: name.trim(),
           email: '',
-          role: 'member'
+          role: 'member',
         })),
-        supervisor: supervisor.trim()
+        supervisor: supervisor.trim(),
       };
 
       const teamDocRef = doc(db, 'teams', editingTeam.id);
@@ -109,7 +174,9 @@ const TeamsList = () => {
   return (
     <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
       <div className="flex justify-between mb-6">
-        <h4 className="text-xl font-semibold text-black dark:text-white">Teams</h4>
+        <h4 className="text-xl font-semibold text-black dark:text-white">
+          {filterByEngineer ? `Teams Assigned to ${engineers.find(eng => eng.email === filterByEngineer)?.displayName || filterByEngineer}` : 'Teams'}
+        </h4>
         <button
           onClick={() => setIsModalOpen(true)}
           className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-center font-medium text-white hover:bg-opacity-90"
@@ -119,23 +186,39 @@ const TeamsList = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-3 2xl:gap-7.5">
-        {teams.length === 0 ? (
-          <div className="col-span-full text-center py-8 text-gray-500 dark:text-gray-400">
-            No teams created yet. Click "Create Team" to create your first team.
+        {loading ? (
+          <div className="flex items-center justify-center h-60">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : teams.length === 0 ? (
+          <div className="flex items-center justify-center h-60">
+            <p className="text-lg text-gray-500 dark:text-gray-400">
+              {isAdmin ? "No teams found." : "You don't have any teams assigned to you."}
+            </p>
           </div>
         ) : (
           teams.map((team) => (
-            <div key={team.id} className="rounded-sm border border-stroke bg-white p-4 shadow-default dark:border-strokedark dark:bg-boxdark">
+            <div
+              key={team.id}
+              className="rounded-sm border border-stroke bg-white p-4 shadow-default dark:border-strokedark dark:bg-boxdark"
+            >
               <div className="flex justify-between items-center mb-4">
-                <h5 className="text-lg font-medium text-black dark:text-white">{team.name}</h5>
+                <h5 className="text-lg font-medium text-black dark:text-white">
+                  {team.name}
+                </h5>
                 <Cog6ToothIcon
                   className="h-5 w-5 text-gray-500 hover:text-primary cursor-pointer"
                   onClick={() => handleEditTeam(team)}
                 />
               </div>
               {team.supervisor && (
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                   Supervisor: {team.supervisor}
+                </p>
+              )}
+              {team.team_engineer && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  Engineer: {engineers.find(eng => eng.email === team.team_engineer)?.displayName || team.team_engineer}
                 </p>
               )}
               <div className="space-y-2">
@@ -145,9 +228,13 @@ const TeamsList = () => {
                       {member.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-black dark:text-white">{member.name}</span>
+                      <span className="text-black dark:text-white">
+                        {member.name}
+                      </span>
                       {member.role && (
-                        <span className="text-xs text-gray-500">{member.role}</span>
+                        <span className="text-xs text-gray-500">
+                          {member.role}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -162,27 +249,33 @@ const TeamsList = () => {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white dark:bg-boxdark p-6 rounded-lg w-96">
-            <h3 className="text-xl font-semibold mb-4">إنشاء فريق جديد</h3>
+            <h3 className="text-xl font-semibold mb-4">Create New Team</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">المشرف</label>
+                <label className="block text-sm font-medium mb-1">
+                  Supervisor
+                </label>
                 <input
                   type="text"
                   value={supervisor}
                   onChange={(e) => setSupervisor(e.target.value)}
                   className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-3 font-medium outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:focus:border-primary"
-                  placeholder="أدخل اسم المشرف"
+                  placeholder="Enter supervisor name"
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium mb-1">عدد الأعضاء</label>
+                <label className="block text-sm font-medium mb-1">
+                  Number of Members
+                </label>
                 <input
                   type="number"
                   value={memberCount}
                   onChange={(e) => {
                     setMemberCount(e.target.value);
-                    setMemberNames(new Array(parseInt(e.target.value) || 0).fill(''));
+                    setMemberNames(
+                      new Array(parseInt(e.target.value) || 0).fill(''),
+                    );
                   }}
                   className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-3 font-medium outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:focus:border-primary"
                 />
@@ -190,7 +283,9 @@ const TeamsList = () => {
 
               {memberNames.map((name, index) => (
                 <div key={index} className="mb-4">
-                  <label className="block text-sm font-medium mb-1">اسم العضو {index + 1}</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Member Name {index + 1}
+                  </label>
                   <input
                     type="text"
                     value={name}
@@ -214,14 +309,18 @@ const TeamsList = () => {
                   }}
                   className="inline-flex items-center justify-center rounded-md border border-stroke py-2 px-6 text-center font-medium text-black hover:bg-opacity-90 dark:border-strokedark dark:text-white"
                 >
-                  إلغاء
+                  Cancel
                 </button>
                 <button
                   onClick={handleCreateTeam}
-                  disabled={!supervisor.trim() || memberNames.length === 0 || memberNames.some(name => !name.trim())}
+                  disabled={
+                    !supervisor.trim() ||
+                    memberNames.length === 0 ||
+                    memberNames.some((name) => !name.trim())
+                  }
                   className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-6 text-center font-medium text-white hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  إنشاء
+                  Create
                 </button>
               </div>
             </div>
@@ -233,18 +332,22 @@ const TeamsList = () => {
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="w-full max-w-lg p-6 bg-white rounded-md shadow-lg">
-            <h3 className="mb-4 text-lg font-medium text-black">تعديل الفريق</h3>
+            <h3 className="mb-4 text-lg font-medium text-black">Edit Team</h3>
             <input
               type="text"
               value={supervisor}
               onChange={(e) => setSupervisor(e.target.value)}
-              placeholder="المشرف"
+              placeholder="Supervisor"
               className="w-full mb-4 p-2 border border-gray-300 rounded"
             />
             <textarea
               value={memberNames.join(', ')}
-              onChange={(e) => setMemberNames(e.target.value.split(',').map(name => name.trim()))}
-              placeholder="أسماء الأعضاء (مفصولة بفواصل)"
+              onChange={(e) =>
+                setMemberNames(
+                  e.target.value.split(',').map((name) => name.trim()),
+                )
+              }
+              placeholder="Member names (separated by commas)"
               className="w-full mb-4 p-2 border border-gray-300 rounded"
             />
             <div className="flex justify-end">
@@ -252,13 +355,13 @@ const TeamsList = () => {
                 onClick={() => setIsEditModalOpen(false)}
                 className="mr-2 inline-flex items-center justify-center rounded-md bg-gray-300 py-2 px-4 text-center font-medium text-black hover:bg-opacity-90"
               >
-                إلغاء
+                Cancel
               </button>
               <button
                 onClick={handleUpdateTeam}
                 className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-4 text-center font-medium text-white hover:bg-opacity-90"
               >
-                حفظ التغييرات
+                Save Changes
               </button>
             </div>
           </div>

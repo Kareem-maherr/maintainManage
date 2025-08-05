@@ -27,30 +27,110 @@ const EngineersList = () => {
     e.stopPropagation();
     setPrinting(engineer.id);
     try {
-      const ticketsRef = collection(db, 'tickets');
+      // First, get all tickets and log their structure
+      const ticketsSnapshot = await getDocs(collection(db, 'tickets'));
+      const allTickets = ticketsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      console.log('All tickets count:', allTickets.length);
+      
+      // Log all ticket fields to understand their structure
+      if (allTickets.length > 0) {
+        console.log('First ticket full structure:', JSON.stringify(allTickets[0], null, 2));
+        
+        // Log all field names from all tickets to find the project reference field
+        const allFields = new Set();
+        allTickets.forEach(ticket => {
+          Object.keys(ticket).forEach(key => allFields.add(key));
+        });
+        console.log('All field names found in tickets:', Array.from(allFields));
+        
+        // Check what fields might contain project references
+        allTickets.forEach((ticket, index) => {
+          console.log(`Ticket ${index} potential project references:`, {
+            id: ticket.id,
+            title: (ticket as any).title,
+            projectId: (ticket as any).projectId,
+            project_id: (ticket as any).project_id,
+            project: (ticket as any).project,
+            companyId: (ticket as any).companyId,
+            company: (ticket as any).company,
+            company_id: (ticket as any).company_id
+          });
+        });
+      }
+      
       const projectsWithTickets = await Promise.all(
         (engineer.assignedProjects || []).map(async (project) => {
-          const ticketsQuery = query(
-            ticketsRef,
-            where('responsible_engineer', '==', engineer.id),
-            where('project_id', '==', project.id)
-          );
-
-          const ticketsSnapshot = await getDocs(ticketsQuery);
-          const tickets = ticketsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
+          console.log('Processing project:', { id: project.id, companyName: project.companyName });
+          
+          // Try all possible matching strategies
+          const tickets = allTickets.filter(ticket => {
+            // For debugging, log all potential matching fields for this ticket
+            const matchingFields = {
+              projectId: (ticket as any).projectId,
+              project_id: (ticket as any).project_id,
+              project: (ticket as any).project,
+              companyId: (ticket as any).companyId,
+              company: (ticket as any).company,
+              company_id: (ticket as any).company_id
+            };
+            
+            // Try to match by any field
+            const isMatch = 
+              matchingFields.projectId === project.id ||
+              matchingFields.project_id === project.id ||
+              matchingFields.project === project.id ||
+              matchingFields.companyId === project.id ||
+              matchingFields.company_id === project.id ||
+              matchingFields.company === project.companyName;
+              
+            if (isMatch) {
+              console.log('MATCH FOUND for ticket:', ticket.id, 'with project:', project.companyName);
+            }
+            
+            return isMatch;
+          });
+          
+          console.log(`Tickets for project ${project.id} (${project.companyName}):`, tickets.length);
+          
+          // For this project, manually assign tickets if none were found
+          if (tickets.length === 0 && allTickets.length > 0) {
+            console.log('No tickets matched automatically. Checking if we can match by company name in ticket title or description');
+            
+            // Try matching by company name in title or description as fallback
+            const fallbackTickets = allTickets.filter(ticket => {
+              const title = String((ticket as any).title || '').toLowerCase();
+              const description = String((ticket as any).description || '').toLowerCase();
+              const companyNameLower = project.companyName.toLowerCase();
+              
+              return title.includes(companyNameLower) || description.includes(companyNameLower);
+            });
+            
+            if (fallbackTickets.length > 0) {
+              console.log('Found tickets by company name in title/description:', fallbackTickets.length);
+              // Use these tickets instead
+              tickets.push(...fallbackTickets);
+            }
+          }
+          
+          const openTickets = tickets.filter(ticket => !(ticket as any).resolved);
+          const resolvedTickets = tickets.filter(ticket => (ticket as any).resolved);
+          
+          console.log(`Open tickets for ${project.companyName}:`, openTickets.length);
+          console.log(`Resolved tickets for ${project.companyName}:`, resolvedTickets.length);
 
           return {
             ...project,
             tickets: {
-              open: tickets.filter(ticket => !ticket.resolved),
-              resolved: tickets.filter(ticket => ticket.resolved)
+              open: openTickets,
+              resolved: resolvedTickets
             }
           };
         })
       );
+      
+      console.log('Projects with tickets:', projectsWithTickets);
+      const totalOpenTickets = projectsWithTickets.reduce((acc, project) => acc + project.tickets.open.length, 0);
+      const totalResolvedTickets = projectsWithTickets.reduce((acc, project) => acc + project.tickets.resolved.length, 0);
 
       const content = `
         <!DOCTYPE html>
@@ -58,72 +138,316 @@ const EngineersList = () => {
         <head>
           <title>${engineer.displayName} - ${t('engineers.projectReport')}</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            .header { margin-bottom: 20px; }
-            .project { border: 1px solid #ddd; padding: 15px; margin: 15px 0; }
-            .ticket { margin: 10px 0; padding: 10px; background: #f9f9f9; }
-            .open { border-left: 4px solid #dc2626; }
-            .resolved { border-left: 4px solid #059669; }
-            .meta { color: #666; font-size: 0.9em; }
-            @media print {
-              .project { break-inside: avoid; }
+            /* Import the desired font from Google fonts. 
+            */
+            @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+
+            /* Define all colors used in this template 
+            */
+            :root{
+              --font-color: black;
+              --highlight-color: #007BFF; /* A more modern blue */
+              --header-bg-color: #F8F9FA; /* Lighter header background */
+              --footer-bg-color: #E9ECEF; /* Lighter footer background */
+              --table-row-separator-color: #DEE2E6;
             }
+
+            @page{
+              size:A4;
+              /* This margin creates space for the running header and footer */
+              margin: 6.5cm 0 3cm 0;
+
+              @top-left{
+                content:element(header);
+              }
+
+              @bottom-left{
+                content:element(footer);
+              }
+            }
+
+            body{
+              /* REMOVED padding from body to fix header gap */
+              margin:0;
+              color:var(--font-color);
+              font-family: 'Montserrat', sans-serif;
+              font-size:10pt;
+            }
+
+            a{
+              color:inherit;
+              text-decoration:none;
+            }
+
+            hr{
+              margin:1cm 0;
+              height:0;
+              border:0;
+              border-top:1mm solid var(--highlight-color);
+            }
+
+            header{
+              /* Adjusted height to match the new @page margin */
+              height:6.5cm;
+              padding: 1cm 2cm 0 2cm;
+              position:running(header);
+              background-color:var(--header-bg-color);
+            }
+
+            header .headerSection{
+              display:flex;
+              justify-content:space-between;
+            }
+            
+            header .headerSection div:last-child{
+              width:45%;
+            }
+
+            header h1, header h2, header h3, header p{
+              margin:0;
+            }
+
+            header h2, header h3{
+              text-transform:uppercase;
+            }
+            
+            header .report-title h2 {
+              font-size: 1.8rem;
+              font-weight: 700;
+            }
+
+            header .issuedTo h3{
+              margin:0 .75cm 0 0;
+              color:var(--highlight-color);
+            }
+            
+            header .issuedTo {
+              display:flex;
+            }
+
+            header hr{
+              margin:.75cm 0 .5cm 0;
+            }
+
+            /* ADDED horizontal padding to main content area */
+            main {
+                padding: 0 2cm;
+            }
+            
+            /* NEW: This class forces a page break for each project */
+            .project-page {
+                page-break-before: always;
+            }
+            
+            /* Prevents a page break before the very first element */
+            .project-page:first-of-type {
+                page-break-before: avoid;
+            }
+
+            main .project-title {
+                padding-top: 1cm; /* Gives space at the top of the new page */
+                margin-bottom: 0.5cm;
+                font-size: 1.5rem;
+                color: var(--highlight-color);
+                border-bottom: 1px solid var(--highlight-color);
+                padding-bottom: 0.25cm;
+            }
+            
+            main .ticket-type-header {
+                font-size: 1.2rem;
+                font-weight: bold;
+                margin-top: 1cm;
+                margin-bottom: 0.5cm;
+            }
+
+            main table{
+              width:100%;
+              border-collapse:collapse;
+            }
+
+            main table thead th{
+              height:1cm;
+              color:var(--highlight-color);
+              text-align:left;
+              font-size: 9pt;
+            }
+
+            main table tbody td{
+              padding:4mm 4px;
+              border-bottom:0.5mm solid var(--table-row-separator-color);
+              font-size: 9pt;
+            }
+            
+            main table tbody td .description {
+              font-size: 8pt;
+              color: #555;
+            }
+
+            main table.summary{
+              width:calc(45% + 2cm);
+              margin-left:55%;
+              margin-top:1cm;
+            }
+
+            main table.summary tr.total{
+              font-weight:bold;
+              background-color:var(--highlight-color);
+              color: white;
+            }
+
+            main table.summary th{
+              padding:4mm 0 4mm 1cm;
+              border-bottom:0;
+              text-align:left;
+            }
+
+            main table.summary td{
+              padding:4mm 2cm 4mm 0;
+              border-bottom:0;
+              text-align:right;
+            }
+
+            aside{
+              -prince-float: bottom;
+              padding:0 2cm .5cm 2cm;
+            }
+
+            aside p{
+              margin:0;
+            }
+
+            footer{
+              height:3cm;
+              line-height:3cm;
+              padding:0 2cm;
+              position:running(footer);
+              background-color:var(--footer-bg-color);
+              font-size:8pt;
+              display:flex;
+              align-items:baseline;
+              justify-content:space-between;
+            }
+
           </style>
         </head>
         <body>
-          <div class="header">
-            <h1>${engineer.displayName} - ${t('engineers.projectReport')}</h1>
-            <p>${t('engineers.email')}: ${engineer.email}</p>
-            <p>${t('engineers.role')}: ${getTranslatedRole(engineer.role)}</p>
-            ${engineer.specialties ? `<p>${t('engineers.specialties')}: ${engineer.specialties.join(', ')}</p>` : ''}
-          </div>
-
-          ${projectsWithTickets.map(project => `
-            <div class="project">
-              <h2>${project.companyName}</h2>
-              <div class="meta">
-                <p>${t('engineers.projectId')}: ${project.id}</p>
-                <p>${t('engineers.contact')}: ${project.contactPerson || t('engineers.notSpecified')}</p>
-                <p>${t('engineers.contactEmail')}: ${project.contactEmail || t('engineers.notSpecified')}</p>
-                <p>${t('engineers.contactPhone')}: ${project.contactPhone || t('engineers.notSpecified')}</p>
+          <header>
+            <div class="headerSection">
+              <div>
+                <h1>${engineer.displayName}</h1>
               </div>
-
-              <h3>${t('engineers.tickets.open')} (${project.tickets.open.length})</h3>
-              ${project.tickets.open.length === 0 ? 
-                `<p>${t('engineers.tickets.noOpen')}</p>` :
-                project.tickets.open.map(ticket => `
-                  <div class="ticket open">
-                    <h4>#${ticket.id} - ${ticket.title}</h4>
-                    <p>${ticket.description || t('engineers.tickets.noDescription')}</p>
-                    <div class="meta">
-                      <p>${t('engineers.tickets.priority')}: ${ticket.priority || t('engineers.notSpecified')}</p>
-                      <p>${t('engineers.tickets.created')}: ${new Date(ticket.createdAt?.seconds * 1000).toLocaleDateString()}</p>
-                      ${ticket.dueDate ? `<p>${t('engineers.tickets.due')}: ${new Date(ticket.dueDate?.seconds * 1000).toLocaleDateString()}</p>` : ''}
-                    </div>
-                  </div>
-                `).join('')
-              }
-
-              <h3>${t('engineers.tickets.resolved')} (${project.tickets.resolved.length})</h3>
-              ${project.tickets.resolved.length === 0 ? 
-                `<p>${t('engineers.tickets.noResolved')}</p>` :
-                project.tickets.resolved.map(ticket => `
-                  <div class="ticket resolved">
-                    <h4>#${ticket.id} - ${ticket.title}</h4>
-                    <p>${ticket.description || t('engineers.tickets.noDescription')}</p>
-                    <div class="meta">
-                      <p>${t('engineers.tickets.priority')}: ${ticket.priority || t('engineers.notSpecified')}</p>
-                      <p>${t('engineers.tickets.created')}: ${new Date(ticket.createdAt?.seconds * 1000).toLocaleDateString()}</p>
-                      ${ticket.resolvedAt ? `<p>${t('engineers.tickets.resolvedDate')}: ${new Date(ticket.resolvedAt?.seconds * 1000).toLocaleDateString()}</p>` : ''}
-                      ${ticket.resolution ? `<p>${t('engineers.tickets.resolution')}: ${ticket.resolution}</p>` : ''}
-                    </div>
-                  </div>
-                `).join('')
-              }
+              <div class="report-title">
+                <h2>${t('engineers.projectReport')}</h2>
+                <p>
+                  <b>${t('engineers.reportDate')}:</b> ${new Date().toLocaleDateString()}
+                </p>
+              </div>
             </div>
-          `).join('')}
+            <hr />
+            <div class="headerSection">
+              <div class="issuedTo">
+                <h3>${t('engineers.engineerDetails')}</h3>
+                <p>
+                  <b>${getTranslatedRole(engineer.role)}</b>
+                  <br />
+                  ${engineer.email}
+                  ${engineer.specialties ? `<br /><b>${t('engineers.specialties')}:</b> ${engineer.specialties.join(', ')}` : ''}
+                </p>
+              </div>
+            </div>
+          </header>
 
-          ${projectsWithTickets.length === 0 ? `<p>${t('engineers.noProjects')}</p>` : ''}
+          <footer>
+              <span><b>${engineer.displayName}</b> | ${t('engineers.projectReport')}</span>
+              <span>${t('engineers.generatedOn')} ${new Date().toLocaleString()}</span>
+          </footer>
+
+          <main>
+            ${projectsWithTickets.map(project => `
+              <div class="project-page">
+                <h2 class="project-title">${project.companyName}</h2>
+                
+                <div class="ticket-type-header">${t('engineers.tickets.open')} (${project.tickets.open.length})</div>
+                ${project.tickets.open.length > 0 ? `
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style="width: 45%;">${t('engineers.tickets.title')}</th>
+                        <th style="width: 15%;">${t('engineers.tickets.priority')}</th>
+                        <th style="width: 20%;">${t('engineers.tickets.created')}</th>
+                        <th style="width: 20%;">${t('engineers.tickets.due')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${project.tickets.open.map(ticket => `
+                        <tr>
+                          <td>
+                            <b>#${ticket.id.substring(0,12)}... - ${ticket.title}</b>
+                            ${ticket.description ? `<br/><span class="description">${ticket.description}</span>` : ''}
+                          </td>
+                          <td>${ticket.priority || 'N/A'}</td>
+                          <td>${new Date(ticket.createdAt?.seconds * 1000).toLocaleDateString()}</td>
+                          <td>${ticket.dueDate ? new Date(ticket.dueDate?.seconds * 1000).toLocaleDateString() : 'N/A'}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                ` : `<p>${t('engineers.tickets.noOpen')}</p>`}
+
+                <div class="ticket-type-header">${t('engineers.tickets.resolved')} (${project.tickets.resolved.length})</div>
+                 ${project.tickets.resolved.length > 0 ? `
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style="width: 45%;">${t('engineers.tickets.title')}</th>
+                        <th style="width: 15%;">${t('engineers.tickets.priority')}</th>
+                        <th style="width: 20%;">${t('engineers.tickets.created')}</th>
+                        <th style="width: 20%;">${t('engineers.tickets.resolvedDate')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${project.tickets.resolved.map(ticket => `
+                        <tr>
+                          <td>
+                            <b>#${ticket.id.substring(0,12)}... - ${ticket.title}</b>
+                             ${ticket.resolution ? `<br/><span class="description">${t('engineers.tickets.resolution')}: ${ticket.resolution}</span>` : ''}
+                          </td>
+                          <td>${ticket.priority || 'N/A'}</td>
+                          <td>${new Date(ticket.createdAt?.seconds * 1000).toLocaleDateString()}</td>
+                          <td>${ticket.resolvedAt ? new Date(ticket.resolvedAt?.seconds * 1000).toLocaleDateString() : 'N/A'}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                ` : `<p>${t('engineers.tickets.noResolved')}</p>`}
+              </div>
+            `).join('')}
+            
+            ${projectsWithTickets.length > 0 ? `
+                <table class="summary">
+                  <tr>
+                    <th>${t('engineers.totalProjects')}</th>
+                    <td>${projectsWithTickets.length}</td>
+                  </tr>
+                  <tr>
+                    <th>${t('engineers.totalOpenTickets')}</th>
+                    <td>${totalOpenTickets}</td>
+                  </tr>
+                  <tr class="total">
+                    <th>${t('engineers.totalResolvedTickets')}</th>
+                    <td>${totalResolvedTickets}</td>
+                  </tr>
+                </table>
+            ` : `<p>${t('engineers.noProjects')}</p>`}
+            
+          </main>
+          
+          <aside>
+            <hr />
+            <p>
+              <b>${t('engineers.endOfReport')}</b>
+            </p>
+          </aside>
         </body>
         </html>
       `;
@@ -162,8 +486,11 @@ const EngineersList = () => {
           ...doc.data()
         })) as Engineer[];
 
+        // Filter out admins and only keep engineers
+        const engineersOnly = engineersData.filter(engineer => engineer.role.toLowerCase() === 'engineer');
+        
         const engineersWithProjects = await Promise.all(
-          engineersData.map(async (engineer) => {
+          engineersOnly.map(async (engineer) => {
             const projectsQuery = query(usersRef, where('responsible_engineer', '==', engineer.email));
             const projectsSnapshot = await getDocs(projectsQuery);
             
@@ -343,9 +670,6 @@ const EngineersList = () => {
 
   return (
     <div className="rounded-sm border border-stroke dark:border-strokedark bg-white dark:bg-boxdark px-5 pt-6 pb-2.5 shadow-default dark:shadow-default dark:text-white">
-      <div className="flex justify-between mb-6">
-        <h4 className="text-xl font-semibold text-black dark:text-white">{t('engineers.title')}</h4>
-      </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-3 2xl:gap-7.5">
         {engineers.length === 0 ? (

@@ -40,6 +40,30 @@ interface CalendarEvent {
   phone: string;
   leadEngineer?: string;
   responsibleEngineer?: string;
+  event_type?: 'single' | 'group';
+  // Group event fields
+  tickets?: {
+    id: string;
+    title: string;
+    company: string;
+    location: string;
+    severity: string;
+    status: string;
+    noteStatus?: string;
+    reportUrl?: string;
+    reportUploadedAt?: any;
+  }[];
+  ticketIds?: string[];
+  ticketCount?: number;
+  lastUpdated?: any;
+  supervisorEmail?: string;
+  status?: string;
+  reportUrl?: string;
+  resolvedAt?: any;
+  resolvedBy?: string;
+  resolved?: boolean;
+  ticketId?: string;
+  eventId?: string;
 }
 
 const CalendarComponent = () => {
@@ -79,9 +103,33 @@ const CalendarComponent = () => {
           const data = doc.data();
           return {
             id: doc.id,
-            ...data,
+            title: data.title || '',
+            teamName: data.teamName || '',
+            projectId: data.projectId || '',
+            projectName: data.projectName || '',
+            projectManager: data.projectManager || '',
+            location: data.location || '',
+            email: data.email || '',
+            phone: data.phone || '',
+            leadEngineer: data.leadEngineer,
+            responsibleEngineer: data.responsibleEngineer,
             startDate: data.startDate.toDate(),
             endDate: data.endDate.toDate(),
+            // Group event fields
+            event_type: data.event_type,
+            tickets: data.tickets,
+            ticketIds: data.ticketIds,
+            ticketCount: data.ticketCount,
+            lastUpdated: data.lastUpdated,
+            supervisorEmail: data.supervisorEmail,
+            status: data.status,
+            reportUrl: data.reportUrl,
+            resolvedAt: data.resolvedAt,
+            resolvedBy: data.resolvedBy,
+            resolved: data.resolved,
+            ticketId: data.ticketId,
+            eventId: data.eventId,
+            teamMembers: data.teamMembers
           } as CalendarEvent;
         });
         setMyEvents(eventsData);
@@ -160,6 +208,7 @@ const CalendarComponent = () => {
         phone: '',
         leadEngineer: team?.leadEngineer || '',
         responsibleEngineer,
+        event_type: 'single', // Manual calendar events are single type
       };
 
       const eventsCollection = collection(db, 'events');
