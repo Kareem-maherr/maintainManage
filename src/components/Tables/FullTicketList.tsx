@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   collection,
   onSnapshot,
@@ -45,6 +47,7 @@ interface FilterOptions {
   severity: string;
   status: string;
   location: string;
+  sort: string;
 }
 
 const FullTicketList = () => {
@@ -55,6 +58,8 @@ const FullTicketList = () => {
   const [showPDFModal, setShowPDFModal] = useState(false);
   const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
   const [showSetDateModal, setShowSetDateModal] = useState(false);
+  const [highlightedTicketId, setHighlightedTicketId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [filters, setFilters] = useState<FilterOptions>({
     startDate: '',
     endDate: '',
@@ -62,6 +67,7 @@ const FullTicketList = () => {
     severity: '',
     status: '',
     location: '',
+    sort: 'newest',
   });
   const [companies, setCompanies] = useState<string[]>([]);
   const [locations, setLocations] = useState<string[]>([]);
@@ -297,6 +303,26 @@ const FullTicketList = () => {
     fetchUserRoleAndTickets();
   }, [filters, auth.currentUser]);
 
+  // Handle URL parameter for ticket highlighting
+  useEffect(() => {
+    const highlightParam = searchParams.get('highlight');
+    if (highlightParam) {
+      setHighlightedTicketId(highlightParam);
+      
+      // Clear the URL parameter immediately
+      const newSearchParams = new URLSearchParams(searchParams);
+      newSearchParams.delete('highlight');
+      setSearchParams(newSearchParams, { replace: true });
+      
+      // Clear highlighting after 1 second
+      const timer = setTimeout(() => {
+        setHighlightedTicketId(null);
+      }, 800);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams.get('highlight'), setSearchParams]);
+
   const handleFilterChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
@@ -315,6 +341,7 @@ const FullTicketList = () => {
       severity: '',
       status: '',
       location: '',
+      sort: 'newest',
     });
   };
 
@@ -362,9 +389,9 @@ const FullTicketList = () => {
     }
   };
 
-  // Filter tickets based on current filters
+  // Filter and sort tickets based on current filters
   const filteredTickets = useMemo(() => {
-    return tickets.filter((ticket) => {
+    const filtered = tickets.filter((ticket) => {
       const matchesCompany = !filters.company || ticket.company.toLowerCase().includes(filters.company.toLowerCase());
       const matchesSeverity = !filters.severity || filters.severity === t('tickets.filters.all') || ticket.severity.toLowerCase() === filters.severity.toLowerCase();
       const matchesStatus = !filters.status || filters.status === t('tickets.filters.all') || ticket.status.toLowerCase() === filters.status.toLowerCase();
@@ -387,6 +414,20 @@ const FullTicketList = () => {
       }
       
       return matchesCompany && matchesSeverity && matchesStatus && matchesLocation && matchesDateRange;
+    });
+
+    // Sort the filtered tickets
+    return filtered.sort((a, b) => {
+      if (!a.createdAt || !b.createdAt) return 0;
+      
+      const dateA = a.createdAt.toDate().getTime();
+      const dateB = b.createdAt.toDate().getTime();
+      
+      if (filters.sort === 'oldest') {
+        return dateA - dateB; // Oldest first
+      } else {
+        return dateB - dateA; // Newest first (default)
+      }
     });
   }, [tickets, filters, t]);
 
@@ -447,162 +488,286 @@ const FullTicketList = () => {
         />
       )}
 
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-title-md2 font-semibold text-black dark:text-white">
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <motion.h2 
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.1 }}
+          className="text-title-md2 font-semibold text-black dark:text-white"
+        >
           {t('tickets.title')}
-        </h2>
-        <div className="flex gap-2">
-          {selectedTickets.size > 0 && (
-            <button
-              onClick={handleCreateGroupEvent}
-              className="inline-flex items-center justify-center rounded-md bg-green-600 py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 lg:px-6 xl:px-8"
-            >
-              Create Group Event ({selectedTickets.size})
-            </button>
-          )}
+        </motion.h2>
+        <motion.div 
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.2 }}
+          className="flex gap-2"
+        >
+          <AnimatePresence>
+            {selectedTickets.size > 0 && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.8, x: -20 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.8, x: -20 }}
+                whileHover={{ scale: 1.05, boxShadow: "0 4px 12px rgba(34, 197, 94, 0.3)" }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleCreateGroupEvent}
+                className="inline-flex items-center justify-center rounded-md bg-green-600 py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 lg:px-6 xl:px-8 transition-all duration-200"
+              >
+                Create Group Event ({selectedTickets.size})
+              </motion.button>
+            )}
+          </AnimatePresence>
           {(isAdmin || isEngineer) && (
-            <button
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3 }}
+              whileHover={{ scale: 1.05, boxShadow: "0 4px 12px rgba(59, 130, 246, 0.3)" }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => setShowNewTicketModal(true)}
-              className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 lg:px-6 xl:px-8"
+              className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 lg:px-6 xl:px-8 transition-all duration-200"
             >
               {t('tickets.createTicket')}
-            </button>
+            </motion.button>
           )}
           {isAdmin && (
-            <button
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.4 }}
+              whileHover={{ scale: 1.05, boxShadow: "0 4px 12px rgba(168, 85, 247, 0.3)" }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => setShowPDFModal(true)}
-              className="inline-flex items-center justify-center rounded-md bg-secondary py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 lg:px-6 xl:px-8"
+              className="inline-flex items-center justify-center rounded-md bg-secondary py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 lg:px-6 xl:px-8 transition-all duration-200"
             >
               {t('tickets.generatePDF')}
-            </button>
+            </motion.button>
           )}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Filter Controls */}
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-6">
-        <div>
+      <motion.div 
+        variants={{
+          hidden: { opacity: 0 },
+          show: {
+            opacity: 1,
+            transition: {
+              staggerChildren: 0.1,
+              delayChildren: 0.3
+            }
+          }
+        }}
+        initial="hidden"
+        animate="show"
+        className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-7"
+      >
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, y: 20 },
+            show: { opacity: 1, y: 0 }
+          }}
+        >
           <label className="mb-2.5 block text-black dark:text-white">
             {t('tickets.filters.startDate')}
           </label>
-          <input
+          <motion.input
             type="date"
             name="startDate"
             value={filters.startDate}
             onChange={handleFilterChange}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
+            whileFocus={{ scale: 1.02, boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.1)" }}
+            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input appearance-none"
           />
-        </div>
+        </motion.div>
 
-        <div>
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, y: 20 },
+            show: { opacity: 1, y: 0 }
+          }}
+        >
           <label className="mb-2.5 block text-black dark:text-white">
             {t('tickets.filters.endDate')}
           </label>
-          <input
+          <motion.input
             type="date"
             name="endDate"
             value={filters.endDate}
             onChange={handleFilterChange}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
+            whileFocus={{ scale: 1.02, boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.1)" }}
+            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input appearance-none"
           />
-        </div>
+        </motion.div>
 
-        <div>
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, y: 20 },
+            show: { opacity: 1, y: 0 }
+          }}
+        >
           <label className="mb-2.5 block text-black dark:text-white">
             {t('tickets.filters.company')}
           </label>
-          <select
+          <motion.select
             name="company"
             value={filters.company}
             onChange={handleFilterChange}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
+            whileFocus={{ scale: 1.02, boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.1)" }}
+            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input appearance-none"
           >
             {companies.map((company, index) => (
               <option key={company || `company-${index}`} value={company}>
                 {company}
               </option>
             ))}
-          </select>
-        </div>
+          </motion.select>
+        </motion.div>
 
-        <div>
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, y: 20 },
+            show: { opacity: 1, y: 0 }
+          }}
+        >
           <label className="mb-2.5 block text-black dark:text-white">
             {t('tickets.filters.severity')}
           </label>
-          <select
+          <motion.select
             name="severity"
             value={filters.severity}
             onChange={handleFilterChange}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
+            whileFocus={{ scale: 1.02, boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.1)" }}
+            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input appearance-none"
           >
             {severityOptions.map((severity, index) => (
               <option key={severity || `severity-${index}`} value={severity}>
                 {severity}
               </option>
             ))}
-          </select>
-        </div>
+          </motion.select>
+        </motion.div>
 
-        <div>
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, y: 20 },
+            show: { opacity: 1, y: 0 }
+          }}
+        >
           <label className="mb-2.5 block text-black dark:text-white">
             {t('tickets.filters.status')}
           </label>
-          <select
+          <motion.select
             name="status"
             value={filters.status}
             onChange={handleFilterChange}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
+            whileFocus={{ scale: 1.02, boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.1)" }}
+            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input appearance-none"
           >
             {statusOptions.map((status, index) => (
               <option key={status || `status-${index}`} value={status}>
                 {status}
               </option>
             ))}
-          </select>
-        </div>
+          </motion.select>
+        </motion.div>
 
-        <div>
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, y: 20 },
+            show: { opacity: 1, y: 0 }
+          }}
+        >
           <label className="mb-2.5 block text-black dark:text-white">
             {t('tickets.filters.location')}
           </label>
-          <select
+          <motion.select
             name="location"
             value={filters.location}
             onChange={handleFilterChange}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input"
+            whileFocus={{ scale: 1.02, boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.1)" }}
+            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input appearance-none"
           >
             {locations.map((location, index) => (
               <option key={location || `location-${index}`} value={location}>
                 {location}
               </option>
             ))}
-          </select>
-        </div>
-      </div>
+          </motion.select>
+        </motion.div>
 
-      <div className="mb-4 flex justify-between items-center">
-        <button
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, y: 20 },
+            show: { opacity: 1, y: 0 }
+          }}
+        >
+          <label className="mb-2.5 block text-black dark:text-white">
+            Sort By
+          </label>
+          <motion.select
+            name="sort"
+            value={filters.sort}
+            onChange={handleFilterChange}
+            whileFocus={{ scale: 1.02, boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.1)" }}
+            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input appearance-none"
+          >
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+          </motion.select>
+        </motion.div>
+      </motion.div>
+
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+        className="mb-4 flex justify-between items-center"
+      >
+        <motion.button
           onClick={clearFilters}
-          className="inline-flex items-center justify-center rounded-md border border-stroke py-2 px-6 text-center font-medium text-black hover:bg-opacity-90 dark:border-strokedark dark:text-white"
+          whileHover={{ scale: 1.05, boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}
+          whileTap={{ scale: 0.95 }}
+          className="inline-flex items-center justify-center rounded-md border border-stroke py-2 px-6 text-center font-medium text-black hover:bg-opacity-90 dark:border-strokedark dark:text-white transition-all duration-200"
         >
           {t('tickets.filters.clearFilters')}
-        </button>
-      </div>
+        </motion.button>
+      </motion.div>
 
       {/* Ticket Table */}
-      <div className="max-w-full overflow-x-auto">
+      <motion.div 
+        key={filteredTickets.length} // Re-trigger animation on filter change
+        initial={{ opacity: 0.5 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3 }}
+        className="max-w-full overflow-x-auto"
+      >
         <table className="w-full table-auto">
-          <thead>
+          <motion.thead
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
             <tr className="bg-gray-2 text-left dark:bg-meta-4">
               <th className="py-4 px-4 font-medium text-black dark:text-white">
-                <input
+                <motion.input
                   type="checkbox"
                   checked={selectedTickets.size === filteredTickets.length && filteredTickets.length > 0}
                   onChange={handleSelectAll}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
                   className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                 />
               </th>
-              <th className="min-w-[220px] py-4 px-4 font-medium text-black dark:text-white xl:pl-11">
+              <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white xl:pl-11">
+                Ticket ID
+              </th>
+              <th className="min-w-[220px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
                 {t('tickets.table.title')}
               </th>
               <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
@@ -637,26 +802,151 @@ const FullTicketList = () => {
                 </th>
               )}
             </tr>
-          </thead>
+          </motion.thead>
           <tbody>
-            {filteredTickets.map((ticket, key) => (
-              <tr
-                key={key}
-                className={`hover:bg-gray-50 dark:hover:bg-meta-4 ${
-                  selectedTickets.has(ticket.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                }`}
-              >
-                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
-                  <input
-                    type="checkbox"
-                    checked={selectedTickets.has(ticket.id)}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      handleTicketSelect(ticket.id);
+            <AnimatePresence mode="popLayout">
+              {loading ? (
+                // Loading Skeleton Rows
+                Array.from({ length: 8 }).map((_, index) => (
+                  <motion.tr
+                    key={`skeleton-${index}`}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="border-b border-[#eee] dark:border-strokedark"
+                  >
+                    <td className="py-5 px-4">
+                      <motion.div
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ repeat: Infinity, duration: 1.5 }}
+                        className="w-4 h-4 bg-gray-200 rounded"
+                      />
+                    </td>
+                    <td className="py-5 px-4 pl-9 xl:pl-11">
+                      <motion.div
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.1 }}
+                        className="h-4 bg-gray-200 rounded w-24"
+                      />
+                    </td>
+                    <td className="py-5 px-4">
+                      <motion.div
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.2 }}
+                        className="h-4 bg-gray-200 rounded w-32"
+                      />
+                    </td>
+                    <td className="py-5 px-4">
+                      <motion.div
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.3 }}
+                        className="h-4 bg-gray-200 rounded w-20"
+                      />
+                    </td>
+                    <td className="py-5 px-4">
+                      <motion.div
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.4 }}
+                        className="h-4 bg-gray-200 rounded w-16"
+                      />
+                    </td>
+                    <td className="py-5 px-4">
+                      <motion.div
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.5 }}
+                        className="h-4 bg-gray-200 rounded w-20"
+                      />
+                    </td>
+                    <td className="py-5 px-4">
+                      <motion.div
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.6 }}
+                        className="h-6 bg-gray-200 rounded-full w-16"
+                      />
+                    </td>
+                    <td className="py-5 px-4">
+                      <motion.div
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.7 }}
+                        className="h-6 bg-gray-200 rounded-full w-20"
+                      />
+                    </td>
+                    <td className="py-5 px-4">
+                      <motion.div
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.8 }}
+                        className="h-6 bg-gray-200 rounded-full w-16"
+                      />
+                    </td>
+                    {isEngineer && (
+                      <td className="py-5 px-4">
+                        <motion.div
+                          animate={{ opacity: [0.5, 1, 0.5] }}
+                          transition={{ repeat: Infinity, duration: 1.5, delay: 0.9 }}
+                          className="h-6 bg-gray-200 rounded-full w-20"
+                        />
+                      </td>
+                    )}
+                    {isResponsibleEngineer && (
+                      <td className="py-5 px-4">
+                        <motion.div
+                          animate={{ opacity: [0.5, 1, 0.5] }}
+                          transition={{ repeat: Infinity, duration: 1.5, delay: 1.0 }}
+                          className="h-4 bg-gray-200 rounded w-24"
+                        />
+                      </td>
+                    )}
+                </motion.tr>
+              ))
+              ) : (
+                filteredTickets.map((ticket, key) => (
+                  <motion.tr
+                    key={ticket.id}
+                    layout
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ 
+                      opacity: 1, 
+                      y: 0,
+                      backgroundColor: highlightedTicketId === ticket.id
+                        ? "rgba(34, 197, 94, 0.2)" // Green highlight for notification
+                        : selectedTickets.has(ticket.id) 
+                          ? "rgba(59, 130, 246, 0.1)" 
+                          : "transparent",
+                      boxShadow: highlightedTicketId === ticket.id
+                        ? "0 0 0 2px rgba(34, 197, 94, 0.5)"
+                        : "none"
                     }}
-                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                  />
-                </td>
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ 
+                      type: "spring", 
+                      stiffness: 300, 
+                      damping: 30,
+                      delay: key * 0.02
+                    }}
+                    whileHover={{ 
+                      backgroundColor: highlightedTicketId === ticket.id
+                        ? "rgba(34, 197, 94, 0.25)"
+                        : selectedTickets.has(ticket.id)
+                          ? "rgba(59, 130, 246, 0.15)"
+                          : "rgba(0, 0, 0, 0.02)",
+                      transition: { duration: 0.2 }
+                    }}
+                    className="border-b border-[#eee] dark:border-strokedark cursor-pointer"
+                  >
+                    <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
+                      <motion.input
+                        type="checkbox"
+                        checked={selectedTickets.has(ticket.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleTicketSelect(ticket.id);
+                        }}
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                    </td>
                 <td 
                   className="border-b border-[#eee] py-5 px-4 pl-9 dark:border-strokedark xl:pl-11 cursor-pointer"
                   onClick={() => setSelectedTicket(ticket)}
@@ -684,10 +974,20 @@ const FullTicketList = () => {
                     {ticket.title}
                     <div className="flex gap-2 ml-2">
                       {!ticket.isViewed && (
-                        <span className="inline-flex h-2 w-2 rounded-full bg-primary"></span>
+                        <motion.span 
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                          className="inline-flex h-2 w-2 rounded-full bg-primary"
+                        />
                       )}
                       {ticket.hasUnreadMessages && (
-                        <span className="inline-flex h-2 w-2 rounded-full bg-meta-1"></span>
+                        <motion.span 
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          transition={{ type: "spring", stiffness: 500, damping: 30, delay: 0.1 }}
+                          className="inline-flex h-2 w-2 rounded-full bg-meta-1"
+                        />
                       )}
                     </div>
                   </h5>
@@ -724,31 +1024,43 @@ const FullTicketList = () => {
                   className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
                   onClick={() => setSelectedTicket(ticket)}
                 >
-                  <p
+                  <motion.p
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    whileHover={{ scale: 1.05 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
                     className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${getSeverityColor(
                       ticket.severity,
                     )}`}
                   >
                     {t(`tickets.severity.${ticket.severity.toLowerCase()}`)}
-                  </p>
+                  </motion.p>
                 </td>
                 <td 
                   className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
                   onClick={() => setSelectedTicket(ticket)}
                 >
-                  <p
+                  <motion.p
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    whileHover={{ scale: 1.05 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25, delay: 0.1 }}
                     className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${getStatusColor(
                       ticket.status,
                     )}`}
                   >
                     {t(`tickets.status.${ticket.status.toLowerCase().replace(' ', '')}`)}
-                  </p>
+                  </motion.p>
                 </td>
                 <td 
                   className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
                   onClick={() => setSelectedTicket(ticket)}
                 >
-                  <p
+                  <motion.p
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    whileHover={{ scale: 1.05 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25, delay: 0.2 }}
                     className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${
                       ticket.isDateSet
                         ? 'bg-green-100 text-green-800'
@@ -758,7 +1070,7 @@ const FullTicketList = () => {
                     {ticket.isDateSet
                       ? t('tickets.table.dateSet')
                       : t('tickets.table.dateNotSet')}
-                  </p>
+                  </motion.p>
                 </td>
                 {isEngineer && (
                   <td 
@@ -766,7 +1078,11 @@ const FullTicketList = () => {
                     onClick={() => setSelectedTicket(ticket)}
                   >
                     {ticket.noteStatus ? (
-                      <p
+                      <motion.p
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        whileHover={{ scale: 1.05 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 25, delay: 0.3 }}
                         className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${
                           ticket.noteStatus === 'Quotation Sent' ? 'bg-teal-100 text-teal-800' :
                           ticket.noteStatus === 'Material Not Complete' ? 'bg-yellow-100 text-yellow-800' :
@@ -775,9 +1091,16 @@ const FullTicketList = () => {
                         }`}
                       >
                         {ticket.noteStatus}
-                      </p>
+                      </motion.p>
                     ) : (
-                      <p className="text-gray-500 italic">Not set</p>
+                      <motion.p 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.3 }}
+                        className="text-gray-500 italic"
+                      >
+                        Not set
+                      </motion.p>
                     )}
                   </td>
                 )}
@@ -791,11 +1114,13 @@ const FullTicketList = () => {
                     </p>
                   </td>
                 )}
-              </tr>
-            ))}
+              </motion.tr>
+              ))
+            )}
+            </AnimatePresence>
           </tbody>
         </table>
-      </div>
+      </motion.div>
     </div>
   );
 };

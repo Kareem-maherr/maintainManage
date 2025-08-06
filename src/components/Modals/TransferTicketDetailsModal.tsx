@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { doc, updateDoc, deleteField } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 import SetDateModal from './SetDateModal';
 
 interface TransferTicketDetailsModalProps {
@@ -9,6 +11,7 @@ interface TransferTicketDetailsModalProps {
 
 const TransferTicketDetailsModal = ({ ticket, isOpen, onClose }: TransferTicketDetailsModalProps) => {
   const [isSetDateModalOpen, setIsSetDateModalOpen] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
 
   if (!isOpen) return null;
 
@@ -40,6 +43,26 @@ const TransferTicketDetailsModal = ({ ticket, isOpen, onClose }: TransferTicketD
         return 'bg-purple-100 text-purple-800';
       default:
         return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const handleRejectTransfer = async () => {
+    if (!ticket.id) return;
+    
+    setIsRejecting(true);
+    try {
+      const ticketRef = doc(db, 'tickets', ticket.id);
+      await updateDoc(ticketRef, {
+        transfer_engineer: deleteField()
+      });
+      
+      // Close modal after successful rejection
+      onClose();
+    } catch (error) {
+      console.error('Error rejecting transfer:', error);
+      alert('Failed to reject transfer. Please try again.');
+    } finally {
+      setIsRejecting(false);
     }
   };
 
@@ -201,6 +224,16 @@ const TransferTicketDetailsModal = ({ ticket, isOpen, onClose }: TransferTicketD
               className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
             >
               Close
+            </button>
+            <button
+              onClick={handleRejectTransfer}
+              disabled={isRejecting}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              {isRejecting ? 'Rejecting...' : 'Reject Transfer'}
             </button>
             <button
               onClick={() => setIsSetDateModalOpen(true)}

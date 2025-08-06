@@ -185,6 +185,7 @@
     }
   },
   "tickets": {
+    "title": "Tickets",
     "createTicket": "Create Ticket",
     "ticketDetails": "Ticket Details",
     "assignTo": "Assign To",

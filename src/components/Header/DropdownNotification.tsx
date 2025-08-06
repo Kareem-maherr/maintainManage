@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { collection, onSnapshot, query, where, orderBy, updateDoc, doc } from 'firebase/firestore';
+import { Link, useNavigate } from 'react-router-dom';
+import { collection, onSnapshot, query, orderBy, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import ClickOutside from '../ClickOutside';
 
@@ -18,6 +18,7 @@ const DropdownNotification = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const notificationsRef = collection(db, 'notifications');
@@ -47,6 +48,21 @@ const DropdownNotification = () => {
       });
     } catch (error) {
       console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const handleNotificationClick = async (notification: Notification) => {
+    // Mark as read
+    await markAsRead(notification.id);
+    
+    // Close dropdown
+    setDropdownOpen(false);
+    
+    // Navigate to tables page with ticket highlighting if ticketId exists
+    if (notification.ticketId) {
+      navigate(`/tables?highlight=${notification.ticketId}`);
+    } else {
+      navigate('/tables');
     }
   };
 
@@ -120,8 +136,8 @@ const DropdownNotification = () => {
                 notifications.map((notification) => (
                   <li
                     key={notification.id}
-                    onClick={() => markAsRead(notification.id)}
-                    className={`flex flex-col gap-2.5 border-t border-stroke px-4.5 py-3 hover:bg-gray-2 dark:border-strokedark dark:hover:bg-meta-4 ${
+                    onClick={() => handleNotificationClick(notification)}
+                    className={`flex flex-col gap-2.5 border-t border-stroke px-4.5 py-3 hover:bg-gray-2 dark:border-strokedark dark:hover:bg-meta-4 cursor-pointer ${
                       !notification.read ? 'bg-gray-1 dark:bg-meta-3' : ''
                     }`}
                   >

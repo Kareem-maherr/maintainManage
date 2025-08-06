@@ -112,8 +112,14 @@ const EngineersList = () => {
             }
           }
           
-          const openTickets = tickets.filter(ticket => !(ticket as any).resolved);
-          const resolvedTickets = tickets.filter(ticket => (ticket as any).resolved);
+          const openTickets = tickets.filter(ticket => {
+            const status = (ticket as any).status?.toLowerCase();
+            return status !== 'resolved';
+          });
+          const resolvedTickets = tickets.filter(ticket => {
+            const status = (ticket as any).status?.toLowerCase();
+            return status === 'resolved';
+          });
           
           console.log(`Open tickets for ${project.companyName}:`, openTickets.length);
           console.log(`Resolved tickets for ${project.companyName}:`, resolvedTickets.length);
@@ -372,22 +378,29 @@ const EngineersList = () => {
                   <table>
                     <thead>
                       <tr>
-                        <th style="width: 45%;">${t('engineers.tickets.title')}</th>
-                        <th style="width: 15%;">${t('engineers.tickets.priority')}</th>
-                        <th style="width: 20%;">${t('engineers.tickets.created')}</th>
-                        <th style="width: 20%;">${t('engineers.tickets.due')}</th>
+                        <th style="width: 45%;">Title</th>
+                        <th style="width: 15%;">Severity</th>
+                        <th style="width: 20%;">Created</th>
+                        <th style="width: 20%;">Days Open</th>
                       </tr>
                     </thead>
                     <tbody>
                       ${project.tickets.open.map(ticket => `
                         <tr>
                           <td>
-                            <b>#${ticket.id.substring(0,12)}... - ${ticket.title}</b>
+                            <b>${ticket.title}</b>
                             ${ticket.description ? `<br/><span class="description">${ticket.description}</span>` : ''}
                           </td>
-                          <td>${ticket.priority || 'N/A'}</td>
-                          <td>${new Date(ticket.createdAt?.seconds * 1000).toLocaleDateString()}</td>
-                          <td>${ticket.dueDate ? new Date(ticket.dueDate?.seconds * 1000).toLocaleDateString() : 'N/A'}</td>
+                          <td>${(ticket as any).severity || 'N/A'}</td>
+                          <td>${(ticket as any).createdAt ? new Date((ticket as any).createdAt.seconds * 1000).toLocaleDateString() : 'N/A'}</td>
+                          <td>${(() => {
+                            if (!(ticket as any).createdAt) return 'N/A';
+                            const createdDate = new Date((ticket as any).createdAt.seconds * 1000);
+                            const today = new Date();
+                            const diffTime = Math.abs(today.getTime() - createdDate.getTime());
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            return diffDays === 1 ? '1 day' : `${diffDays} days`;
+                          })()}</td>
                         </tr>
                       `).join('')}
                     </tbody>
@@ -400,7 +413,7 @@ const EngineersList = () => {
                     <thead>
                       <tr>
                         <th style="width: 45%;">${t('engineers.tickets.title')}</th>
-                        <th style="width: 15%;">${t('engineers.tickets.priority')}</th>
+                        <th style="width: 15%;">Severity</th>
                         <th style="width: 20%;">${t('engineers.tickets.created')}</th>
                         <th style="width: 20%;">${t('engineers.tickets.resolvedDate')}</th>
                       </tr>
@@ -408,13 +421,13 @@ const EngineersList = () => {
                     <tbody>
                       ${project.tickets.resolved.map(ticket => `
                         <tr>
-                          <td>
-                            <b>#${ticket.id.substring(0,12)}... - ${ticket.title}</b>
-                             ${ticket.resolution ? `<br/><span class="description">${t('engineers.tickets.resolution')}: ${ticket.resolution}</span>` : ''}
-                          </td>
-                          <td>${ticket.priority || 'N/A'}</td>
-                          <td>${new Date(ticket.createdAt?.seconds * 1000).toLocaleDateString()}</td>
-                          <td>${ticket.resolvedAt ? new Date(ticket.resolvedAt?.seconds * 1000).toLocaleDateString() : 'N/A'}</td>
+                           <td>
+                             <b>${(ticket as any).title}</b>
+                              ${(ticket as any).resolution ? `<br/><span class="description">${t('engineers.tickets.resolution')}: ${(ticket as any).resolution}</span>` : ''}
+                           </td>
+                           <td>${(ticket as any).severity || 'N/A'}</td>
+                           <td>${(ticket as any).createdAt ? new Date((ticket as any).createdAt.seconds * 1000).toLocaleDateString() : 'N/A'}</td>
+                           <td>${(ticket as any).resolvedAt ? new Date((ticket as any).resolvedAt.seconds * 1000).toLocaleDateString() : 'N/A'}</td>
                         </tr>
                       `).join('')}
                     </tbody>
