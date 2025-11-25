@@ -13,14 +13,13 @@ import {
   getDocs,
   limit,
   updateDoc,
+  addDoc,
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { getAuth } from 'firebase/auth';
-import TicketDetailsModal from '../Modals/TicketDetailsModal';
-import NewTicketModal from '../Modals/NewTicketModal';
-import PDFGeneratorModal from '../Modals/PDFGeneratorModal';
-import SetDateModal from '../Modals/SetDateModal';
 import { useLanguage } from '../../contexts/LanguageContext';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
 
 interface FullTicket {
   id: string;
@@ -38,6 +37,8 @@ interface FullTicket {
   readableId?: string;
   sender?: string;
   noteStatus?: string;
+  projectNumber?: string;
+  ticketDetails?: string;
 }
 
 interface FilterOptions {
@@ -50,14 +51,20 @@ interface FilterOptions {
   sort: string;
 }
 
+interface Team {
+  id: string;
+  name: string;
+  leadEngineer: string;
+  projectManager: string;
+  supervisor?: string;
+  supervisorEmail?: string;
+  team_engineer?: string;
+}
+
 const FullTicketList = () => {
   const [tickets, setTickets] = useState<FullTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState<FullTicket | null>(null);
-  const [showNewTicketModal, setShowNewTicketModal] = useState(false);
-  const [showPDFModal, setShowPDFModal] = useState(false);
-  const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
-  const [showSetDateModal, setShowSetDateModal] = useState(false);
   const [highlightedTicketId, setHighlightedTicketId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [filters, setFilters] = useState<FilterOptions>({
@@ -76,34 +83,19 @@ const FullTicketList = () => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [showDatePopup, setShowDatePopup] = useState(false);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+  const [showStatusPopup, setShowStatusPopup] = useState(false);
+  const [editStatus, setEditStatus] = useState<string>('');
+  const [editSeverity, setEditSeverity] = useState<string>('');
   const auth = getAuth();
   const { t } = useLanguage();
 
-  // Handle checkbox selection
-  const handleTicketSelect = (ticketId: string) => {
-    const newSelected = new Set(selectedTickets);
-    if (newSelected.has(ticketId)) {
-      newSelected.delete(ticketId);
-    } else {
-      newSelected.add(ticketId);
-    }
-    setSelectedTickets(newSelected);
-  };
-
-  // Handle select all checkbox
-  const handleSelectAll = () => {
-    if (selectedTickets.size === filteredTickets.length) {
-      setSelectedTickets(new Set());
-    } else {
-      setSelectedTickets(new Set(filteredTickets.map(ticket => ticket.id)));
-    }
-  };
-
-  // Handle group event creation
-  const handleCreateGroupEvent = () => {
-    if (selectedTickets.size > 0) {
-      setShowSetDateModal(true);
-    }
+  // Handle ticket selection
+  const handleSelectTicket = (ticket: FullTicket) => {
+    setSelectedTicket(selectedTicket?.id === ticket.id ? null : ticket);
   };
 
   const severityOptions = [
@@ -276,6 +268,8 @@ const FullTicketList = () => {
               readableId: ticketData.ticketId || 'Unknown',
               sender: ticketData.sender,
               noteStatus: ticketData.noteStatus || '',
+              projectNumber: ticketData.projectNumber,
+              ticketDetails: ticketData.ticketDetails,
             });
           }
 
@@ -449,6 +443,109 @@ const FullTicketList = () => {
     return t('tickets.timeElapsed.justNow');
   };
 
+  // Fetch teams for the date popup
+  useEffect(() => {
+    const fetchTeams = async () => {
+      if (!userEmail) return;
+      
+      const teamsCollection = collection(db, 'teams');
+      const q = query(teamsCollection, where('team_engineer', '==', userEmail));
+      const teamsSnapshot = await getDocs(q);
+      const teamsData = teamsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Team[];
+      setTeams(teamsData);
+    };
+
+    fetchTeams();
+  }, [userEmail]);
+
+  // Initialize edit values when ticket is selected
+  useEffect(() => {
+    if (selectedTicket) {
+      setEditStatus(selectedTicket.status);
+      setEditSeverity(selectedTicket.severity);
+    }
+  }, [selectedTicket]);
+
+  // Handle save event date
+  const handleSaveEventDate = async () => {
+    if (!selectedDate || !selectedTeam || !selectedTicket) return;
+
+    const selectedTeamData = teams.find(team => team.id === selectedTeam);
+    if (!selectedTeamData) return;
+
+    const endDate = new Date(selectedDate);
+    endDate.setDate(endDate.getDate() + 1);
+
+    try {
+      const eventData = {
+        title: selectedTicket.title || 'Untitled Event',
+        startDate: selectedDate,
+        endDate: endDate,
+        teamName: selectedTeamData.name || 'Unknown Team',
+        projectName: selectedTicket.company || 'Unknown Project',
+        projectManager: selectedTeamData.projectManager || 'Unassigned',
+        leadEngineer: selectedTeamData.leadEngineer || 'Unassigned',
+        location: selectedTicket.location || 'Unknown Location',
+        ticketIds: [selectedTicket.id],
+        ticketCount: 1,
+        event_type: 'single',
+        responsibleEngineer: userEmail || '',
+        supervisorEmail: selectedTeamData.supervisorEmail || '',
+        createdAt: new Date(),
+        tickets: [{
+          id: selectedTicket.id,
+          title: selectedTicket.title,
+          company: selectedTicket.company,
+          location: selectedTicket.location,
+          severity: selectedTicket.severity,
+          status: selectedTicket.status,
+          noteStatus: selectedTicket.noteStatus
+        }]
+      };
+
+      await addDoc(collection(db, 'events'), eventData);
+
+      const ticketRef = doc(db, 'tickets', selectedTicket.id);
+      const updateData: any = {
+        date: selectedDate,
+        isDateSet: true,
+        supervisor_email: selectedTeamData.supervisorEmail || ''
+      };
+      
+      if (!(selectedTicket as any).transfer_engineer) {
+        updateData.responsible_engineer = userEmail || '';
+      }
+      
+      await updateDoc(ticketRef, updateData);
+
+      setShowDatePopup(false);
+      setSelectedTeam('');
+      setSelectedDate(new Date());
+    } catch (error) {
+      console.error('Error creating event:', error);
+    }
+  };
+
+  // Handle save status and severity
+  const handleSaveStatusAndSeverity = async () => {
+    if (!selectedTicket || !editStatus || !editSeverity) return;
+
+    try {
+      const ticketRef = doc(db, 'tickets', selectedTicket.id);
+      await updateDoc(ticketRef, {
+        status: editStatus,
+        severity: editSeverity,
+      });
+
+      setShowStatusPopup(false);
+    } catch (error) {
+      console.error('Error updating ticket status and severity:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
@@ -460,667 +557,493 @@ const FullTicketList = () => {
   }
 
   return (
-    <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
-      {selectedTicket && (
-        <TicketDetailsModal
-          ticket={selectedTicket}
-          onClose={() => setSelectedTicket(null)}
-        />
-      )}
-
-      {showNewTicketModal && (
-        <NewTicketModal onClose={() => setShowNewTicketModal(false)} />
-      )}
-
-      {showPDFModal && (
-        <PDFGeneratorModal
-          onClose={() => setShowPDFModal(false)}
-        />
-      )}
-      {showSetDateModal && (
-        <SetDateModal
-          isOpen={showSetDateModal}
-          onClose={() => {
-            setShowSetDateModal(false);
-            setSelectedTickets(new Set()); // Clear selection after creating event
-          }}
-          tickets={filteredTickets.filter(ticket => selectedTickets.has(ticket.id))}
-        />
-      )}
-
-      <motion.div 
+    <div className="w-full">
+      {/* Header */}
+      <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+        className="flex justify-between items-center mb-6"
       >
-        <motion.h2 
-          initial={{ opacity: 0, x: -20 }}
+        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">{t('tickets.title')}</h2>
+      </motion.div>
+
+      {/* Split Panel Layout */}
+      <div className="flex gap-6 h-[calc(100vh-200px)]">
+        {/* Left Panel - Ticket List */}
+        <motion.div
+          initial={{ opacity: 0, x: -50 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.1 }}
-          className="text-title-md2 font-semibold text-black dark:text-white"
+          transition={{ duration: 0.5 }}
+          className="w-1/3 bg-white dark:bg-boxdark rounded-xl shadow-sm overflow-hidden flex flex-col"
         >
-          {t('tickets.title')}
-        </motion.h2>
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2 }}
-          className="flex gap-2"
-        >
-          <AnimatePresence>
-            {selectedTickets.size > 0 && (
-              <motion.button
-                initial={{ opacity: 0, scale: 0.8, x: -20 }}
-                animate={{ opacity: 1, scale: 1, x: 0 }}
-                exit={{ opacity: 0, scale: 0.8, x: -20 }}
-                whileHover={{ scale: 1.05, boxShadow: "0 4px 12px rgba(34, 197, 94, 0.3)" }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleCreateGroupEvent}
-                className="inline-flex items-center justify-center rounded-md bg-green-600 py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 lg:px-6 xl:px-8 transition-all duration-200"
-              >
-                Create Group Event ({selectedTickets.size})
-              </motion.button>
-            )}
-          </AnimatePresence>
-          {(isAdmin || isEngineer) && (
-            <motion.button
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.3 }}
-              whileHover={{ scale: 1.05, boxShadow: "0 4px 12px rgba(59, 130, 246, 0.3)" }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setShowNewTicketModal(true)}
-              className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 lg:px-6 xl:px-8 transition-all duration-200"
-            >
-              {t('tickets.createTicket')}
-            </motion.button>
-          )}
-          {isAdmin && (
-            <motion.button
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.4 }}
-              whileHover={{ scale: 1.05, boxShadow: "0 4px 12px rgba(168, 85, 247, 0.3)" }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setShowPDFModal(true)}
-              className="inline-flex items-center justify-center rounded-md bg-secondary py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 lg:px-6 xl:px-8 transition-all duration-200"
-            >
-              {t('tickets.generatePDF')}
-            </motion.button>
-          )}
-        </motion.div>
-      </motion.div>
-
-      {/* Filter Controls */}
-      <motion.div 
-        variants={{
-          hidden: { opacity: 0 },
-          show: {
-            opacity: 1,
-            transition: {
-              staggerChildren: 0.1,
-              delayChildren: 0.3
-            }
-          }
-        }}
-        initial="hidden"
-        animate="show"
-        className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-7"
-      >
-        <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 20 },
-            show: { opacity: 1, y: 0 }
-          }}
-        >
-          <label className="mb-2.5 block text-black dark:text-white">
-            {t('tickets.filters.startDate')}
-          </label>
-          <motion.input
-            type="date"
-            name="startDate"
-            value={filters.startDate}
-            onChange={handleFilterChange}
-            whileFocus={{ scale: 1.02, boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.1)" }}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input appearance-none"
-          />
-        </motion.div>
-
-        <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 20 },
-            show: { opacity: 1, y: 0 }
-          }}
-        >
-          <label className="mb-2.5 block text-black dark:text-white">
-            {t('tickets.filters.endDate')}
-          </label>
-          <motion.input
-            type="date"
-            name="endDate"
-            value={filters.endDate}
-            onChange={handleFilterChange}
-            whileFocus={{ scale: 1.02, boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.1)" }}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input appearance-none"
-          />
-        </motion.div>
-
-        <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 20 },
-            show: { opacity: 1, y: 0 }
-          }}
-        >
-          <label className="mb-2.5 block text-black dark:text-white">
-            {t('tickets.filters.company')}
-          </label>
-          <motion.select
-            name="company"
-            value={filters.company}
-            onChange={handleFilterChange}
-            whileFocus={{ scale: 1.02, boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.1)" }}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input appearance-none"
-          >
-            {companies.map((company, index) => (
-              <option key={company || `company-${index}`} value={company}>
-                {company}
-              </option>
-            ))}
-          </motion.select>
-        </motion.div>
-
-        <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 20 },
-            show: { opacity: 1, y: 0 }
-          }}
-        >
-          <label className="mb-2.5 block text-black dark:text-white">
-            {t('tickets.filters.severity')}
-          </label>
-          <motion.select
-            name="severity"
-            value={filters.severity}
-            onChange={handleFilterChange}
-            whileFocus={{ scale: 1.02, boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.1)" }}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input appearance-none"
-          >
-            {severityOptions.map((severity, index) => (
-              <option key={severity || `severity-${index}`} value={severity}>
-                {severity}
-              </option>
-            ))}
-          </motion.select>
-        </motion.div>
-
-        <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 20 },
-            show: { opacity: 1, y: 0 }
-          }}
-        >
-          <label className="mb-2.5 block text-black dark:text-white">
-            {t('tickets.filters.status')}
-          </label>
-          <motion.select
-            name="status"
-            value={filters.status}
-            onChange={handleFilterChange}
-            whileFocus={{ scale: 1.02, boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.1)" }}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input appearance-none"
-          >
-            {statusOptions.map((status, index) => (
-              <option key={status || `status-${index}`} value={status}>
-                {status}
-              </option>
-            ))}
-          </motion.select>
-        </motion.div>
-
-        <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 20 },
-            show: { opacity: 1, y: 0 }
-          }}
-        >
-          <label className="mb-2.5 block text-black dark:text-white">
-            {t('tickets.filters.location')}
-          </label>
-          <motion.select
-            name="location"
-            value={filters.location}
-            onChange={handleFilterChange}
-            whileFocus={{ scale: 1.02, boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.1)" }}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input appearance-none"
-          >
-            {locations.map((location, index) => (
-              <option key={location || `location-${index}`} value={location}>
-                {location}
-              </option>
-            ))}
-          </motion.select>
-        </motion.div>
-
-        <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 20 },
-            show: { opacity: 1, y: 0 }
-          }}
-        >
-          <label className="mb-2.5 block text-black dark:text-white">
-            Sort By
-          </label>
-          <motion.select
-            name="sort"
-            value={filters.sort}
-            onChange={handleFilterChange}
-            whileFocus={{ scale: 1.02, boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.1)" }}
-            className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input appearance-none"
-          >
-            <option value="newest">Newest First</option>
-            <option value="oldest">Oldest First</option>
-          </motion.select>
-        </motion.div>
-      </motion.div>
-
-      <motion.div 
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="mb-4 flex justify-between items-center"
-      >
-        <motion.button
-          onClick={clearFilters}
-          whileHover={{ scale: 1.05, boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}
-          whileTap={{ scale: 0.95 }}
-          className="inline-flex items-center justify-center rounded-md border border-stroke py-2 px-6 text-center font-medium text-black hover:bg-opacity-90 dark:border-strokedark dark:text-white transition-all duration-200"
-        >
-          {t('tickets.filters.clearFilters')}
-        </motion.button>
-      </motion.div>
-
-      {/* Ticket Table */}
-      <motion.div 
-        key={filteredTickets.length} // Re-trigger animation on filter change
-        initial={{ opacity: 0.5 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.3 }}
-        className="max-w-full overflow-x-auto"
-      >
-        <table className="w-full table-auto">
-          <motion.thead
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <tr className="bg-gray-2 text-left dark:bg-meta-4">
-              <th className="py-4 px-4 font-medium text-black dark:text-white">
-                <motion.input
-                  type="checkbox"
-                  checked={selectedTickets.size === filteredTickets.length && filteredTickets.length > 0}
-                  onChange={handleSelectAll}
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                />
-              </th>
-              <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white xl:pl-11">
-                Ticket ID
-              </th>
-              <th className="min-w-[220px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
-                {t('tickets.table.title')}
-              </th>
-              <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
-                {t('tickets.table.company')}
-              </th>
-              <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
-                {t('tickets.table.location')}
-              </th>
-              <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
-                {t('tickets.table.created')}
-              </th>
-              <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
-                {t('tickets.table.timeElapsed')}
-              </th>
-              <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
-                {t('tickets.table.severity')}
-              </th>
-              <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
-                {t('tickets.table.status')}
-              </th>
-              <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
-                {t('tickets.table.dateStatus')}
-              </th>
-              {isEngineer && (
-                <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
-                  Note Status
-                </th>
-              )}
-              {isResponsibleEngineer && (
-                <th className="min-w-[180px] py-4 px-4 font-medium text-black dark:text-white whitespace-nowrap">
-                  {t('tickets.table.assignedTo')}
-                </th>
-              )}
-            </tr>
-          </motion.thead>
-          <tbody>
+          <div className="p-4 border-b border-gray-200 dark:border-strokedark">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              All Tickets ({filteredTickets.length})
+            </h3>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto">
             <AnimatePresence mode="popLayout">
               {loading ? (
-                // Loading Skeleton Rows
                 Array.from({ length: 8 }).map((_, index) => (
-                  <motion.tr
+                  <motion.div
                     key={`skeleton-${index}`}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
                     transition={{ delay: index * 0.05 }}
-                    className="border-b border-[#eee] dark:border-strokedark"
+                    className="border-b border-gray-200 dark:border-strokedark p-4"
                   >
-                    <td className="py-5 px-4">
-                      <motion.div
-                        animate={{ opacity: [0.5, 1, 0.5] }}
-                        transition={{ repeat: Infinity, duration: 1.5 }}
-                        className="w-4 h-4 bg-gray-200 rounded"
-                      />
-                    </td>
-                    <td className="py-5 px-4 pl-9 xl:pl-11">
-                      <motion.div
-                        animate={{ opacity: [0.5, 1, 0.5] }}
-                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.1 }}
-                        className="h-4 bg-gray-200 rounded w-24"
-                      />
-                    </td>
-                    <td className="py-5 px-4">
-                      <motion.div
-                        animate={{ opacity: [0.5, 1, 0.5] }}
-                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.2 }}
-                        className="h-4 bg-gray-200 rounded w-32"
-                      />
-                    </td>
-                    <td className="py-5 px-4">
-                      <motion.div
-                        animate={{ opacity: [0.5, 1, 0.5] }}
-                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.3 }}
-                        className="h-4 bg-gray-200 rounded w-20"
-                      />
-                    </td>
-                    <td className="py-5 px-4">
-                      <motion.div
-                        animate={{ opacity: [0.5, 1, 0.5] }}
-                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.4 }}
-                        className="h-4 bg-gray-200 rounded w-16"
-                      />
-                    </td>
-                    <td className="py-5 px-4">
-                      <motion.div
-                        animate={{ opacity: [0.5, 1, 0.5] }}
-                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.5 }}
-                        className="h-4 bg-gray-200 rounded w-20"
-                      />
-                    </td>
-                    <td className="py-5 px-4">
-                      <motion.div
-                        animate={{ opacity: [0.5, 1, 0.5] }}
-                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.6 }}
-                        className="h-6 bg-gray-200 rounded-full w-16"
-                      />
-                    </td>
-                    <td className="py-5 px-4">
-                      <motion.div
-                        animate={{ opacity: [0.5, 1, 0.5] }}
-                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.7 }}
-                        className="h-6 bg-gray-200 rounded-full w-20"
-                      />
-                    </td>
-                    <td className="py-5 px-4">
-                      <motion.div
-                        animate={{ opacity: [0.5, 1, 0.5] }}
-                        transition={{ repeat: Infinity, duration: 1.5, delay: 0.8 }}
-                        className="h-6 bg-gray-200 rounded-full w-16"
-                      />
-                    </td>
-                    {isEngineer && (
-                      <td className="py-5 px-4">
-                        <motion.div
-                          animate={{ opacity: [0.5, 1, 0.5] }}
-                          transition={{ repeat: Infinity, duration: 1.5, delay: 0.9 }}
-                          className="h-6 bg-gray-200 rounded-full w-20"
-                        />
-                      </td>
-                    )}
-                    {isResponsibleEngineer && (
-                      <td className="py-5 px-4">
-                        <motion.div
-                          animate={{ opacity: [0.5, 1, 0.5] }}
-                          transition={{ repeat: Infinity, duration: 1.5, delay: 1.0 }}
-                          className="h-4 bg-gray-200 rounded w-24"
-                        />
-                      </td>
-                    )}
-                </motion.tr>
-              ))
+                    <motion.div
+                      animate={{ opacity: [0.5, 1, 0.5] }}
+                      transition={{ repeat: Infinity, duration: 1.5 }}
+                      className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"
+                    />
+                    <motion.div
+                      animate={{ opacity: [0.5, 1, 0.5] }}
+                      transition={{ repeat: Infinity, duration: 1.5, delay: 0.1 }}
+                      className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2"
+                    />
+                  </motion.div>
+                ))
               ) : (
-                filteredTickets.map((ticket, key) => (
-                  <motion.tr
+                filteredTickets.map((ticket, index) => (
+                  <motion.div
                     key={ticket.id}
-                    layout
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ 
-                      opacity: 1, 
-                      y: 0,
-                      backgroundColor: highlightedTicketId === ticket.id
-                        ? "rgba(34, 197, 94, 0.2)" // Green highlight for notification
-                        : selectedTickets.has(ticket.id) 
-                          ? "rgba(59, 130, 246, 0.1)" 
-                          : "transparent",
-                      boxShadow: highlightedTicketId === ticket.id
-                        ? "0 0 0 2px rgba(34, 197, 94, 0.5)"
-                        : "none"
-                    }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ 
-                      type: "spring", 
-                      stiffness: 300, 
-                      damping: 30,
-                      delay: key * 0.02
-                    }}
-                    whileHover={{ 
-                      backgroundColor: highlightedTicketId === ticket.id
-                        ? "rgba(34, 197, 94, 0.25)"
-                        : selectedTickets.has(ticket.id)
-                          ? "rgba(59, 130, 246, 0.15)"
-                          : "rgba(0, 0, 0, 0.02)",
-                      transition: { duration: 0.2 }
-                    }}
-                    className="border-b border-[#eee] dark:border-strokedark cursor-pointer"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.02 }}
+                    onClick={() => handleSelectTicket(ticket)}
+                    className={`
+                      border-b border-gray-200 dark:border-strokedark p-4 cursor-pointer transition-all
+                      ${selectedTicket?.id === ticket.id 
+                        ? 'bg-primary/10 border-l-4 border-l-primary' 
+                        : 'hover:bg-gray-50 dark:hover:bg-meta-4'}
+                    `}
                   >
-                    <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
-                      <motion.input
-                        type="checkbox"
-                        checked={selectedTickets.has(ticket.id)}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleTicketSelect(ticket.id);
-                        }}
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                      />
-                    </td>
-                <td 
-                  className="border-b border-[#eee] py-5 px-4 pl-9 dark:border-strokedark xl:pl-11 cursor-pointer"
-                  onClick={() => setSelectedTicket(ticket)}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-gray-900 dark:text-white truncate mb-1 flex items-center gap-2">
+                          {ticket.title}
+                          {!ticket.isViewed && (
+                            <span className="h-2 w-2 rounded-full bg-primary" />
+                          )}
+                          {ticket.hasUnreadMessages && (
+                            <span className="h-2 w-2 rounded-full bg-meta-1" />
+                          )}
+                        </h4>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                          {ticket.company}
+                        </p>
+                        <div className="flex gap-2 mt-2">
+                          <span className={`
+                            px-2 py-0.5 text-xs font-medium rounded-full
+                            ${ticket.status === 'Resolved' ? 'bg-green-100 text-green-800' : 
+                              ticket.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                              'bg-yellow-100 text-yellow-800'}
+                          `}>
+                            {ticket.status}
+                          </span>
+                          <span className={`
+                            px-2 py-0.5 text-xs font-medium rounded-full
+                            ${ticket.severity === 'Critical' ? 'bg-red-100 text-red-800' :
+                              ticket.severity === 'High' ? 'bg-orange-100 text-orange-800' :
+                              ticket.severity === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-green-100 text-green-800'}
+                          `}>
+                            {ticket.severity}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))
+              )}
+            </AnimatePresence>
+          </div>
+        </motion.div>
+
+        {/* Right Panel - Ticket Details */}
+        <motion.div
+          initial={{ opacity: 0, x: 50 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5 }}
+          className="flex-1 bg-white dark:bg-boxdark rounded-xl shadow-sm overflow-hidden"
+        >
+          <AnimatePresence mode="wait">
+            {selectedTicket ? (
+              <motion.div
+                key={selectedTicket.id}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.3 }}
+                className="h-full overflow-y-auto p-8"
+              >
+                {/* Ticket Header */}
+                <motion.div
+                  initial={{ y: -20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.1 }}
+                  className="mb-6 pb-6 border-b border-gray-200 dark:border-strokedark"
                 >
-                  {ticket.readableId === 'Unknown' ? (
-                    <p 
-                      className="font-medium text-meta-5 cursor-pointer hover:text-primary hover:underline"
-                      onClick={(e) => handleGenerateTicketId(e, ticket)}
-                    >
-                      {generatingId === ticket.id ? (
-                        <span className="flex items-center">
-                          <span className="animate-spin h-3 w-3 mr-1 border-t-2 border-b-2 border-primary rounded-full"></span>
-                          Generating...
-                        </span>
-                      ) : (
-                        'Unknown (click to generate)'
-                      )}
-                    </p>
-                  ) : (
-                    <p className="font-medium text-meta-5">{ticket.readableId}</p>
-                  )}
-                </td>
-                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
-                  <h5 className="font-medium text-black dark:text-white flex items-center">
-                    {ticket.title}
-                    <div className="flex gap-2 ml-2">
-                      {!ticket.isViewed && (
-                        <motion.span 
-                          initial={{ scale: 0, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                          className="inline-flex h-2 w-2 rounded-full bg-primary"
-                        />
-                      )}
-                      {ticket.hasUnreadMessages && (
-                        <motion.span 
-                          initial={{ scale: 0, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          transition={{ type: "spring", stiffness: 500, damping: 30, delay: 0.1 }}
-                          className="inline-flex h-2 w-2 rounded-full bg-meta-1"
-                        />
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                        {selectedTicket.title}
+                      </h2>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        ID: {selectedTicket.readableId || 'N/A'}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className={`
+                        px-3 py-1 text-sm font-medium rounded-full
+                        ${selectedTicket.status === 'Resolved' ? 'bg-green-100 text-green-800' : 
+                          selectedTicket.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                          'bg-yellow-100 text-yellow-800'}
+                      `}>
+                        {selectedTicket.status}
+                      </span>
+                      <span className={`
+                        px-3 py-1 text-sm font-medium rounded-full
+                        ${selectedTicket.severity === 'Critical' ? 'bg-red-100 text-red-800' :
+                          selectedTicket.severity === 'High' ? 'bg-orange-100 text-orange-800' :
+                          selectedTicket.severity === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-green-100 text-green-800'}
+                      `}>
+                        {selectedTicket.severity}
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Ticket Details - Reorganized with Sections */}
+                <motion.div
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="space-y-8"
+                >
+                  {/* Project Information Section */}
+                  <div className="bg-gray-50 dark:bg-meta-4 rounded-lg p-5">
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                      Project Information
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Company</label>
+                        <p className="text-base font-medium text-gray-900 dark:text-white mt-1">{selectedTicket.company}</p>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Location</label>
+                        <p className="text-base font-medium text-gray-900 dark:text-white mt-1">{selectedTicket.location}</p>
+                      </div>
+                      {selectedTicket.projectNumber && (
+                        <div className="md:col-span-2">
+                          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Project Number</label>
+                          <p className="text-base font-medium text-primary dark:text-primary mt-1">{selectedTicket.projectNumber}</p>
+                        </div>
                       )}
                     </div>
-                  </h5>
-                </td>
-                <td 
-                  className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
-                  onClick={() => setSelectedTicket(ticket)}
-                >
-                  <p className="text-black dark:text-white">{ticket.company}</p>
-                </td>
-                <td 
-                  className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
-                  onClick={() => setSelectedTicket(ticket)}
-                >
-                  <p className="text-black dark:text-white">{ticket.location}</p>
-                </td>
-                <td 
-                  className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
-                  onClick={() => setSelectedTicket(ticket)}
-                >
-                  <p className="text-black dark:text-white">
-                    {ticket.createdAt?.toDate().toLocaleDateString()}
-                  </p>
-                </td>
-                <td 
-                  className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
-                  onClick={() => setSelectedTicket(ticket)}
-                >
-                  <p className="text-black dark:text-white">
-                    {getTimeElapsed(ticket.createdAt)}
-                  </p>
-                </td>
-                <td 
-                  className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
-                  onClick={() => setSelectedTicket(ticket)}
-                >
-                  <motion.p
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    whileHover={{ scale: 1.05 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                    className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${getSeverityColor(
-                      ticket.severity,
-                    )}`}
-                  >
-                    {t(`tickets.severity.${ticket.severity.toLowerCase()}`)}
-                  </motion.p>
-                </td>
-                <td 
-                  className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
-                  onClick={() => setSelectedTicket(ticket)}
-                >
-                  <motion.p
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    whileHover={{ scale: 1.05 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 25, delay: 0.1 }}
-                    className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${getStatusColor(
-                      ticket.status,
-                    )}`}
-                  >
-                    {t(`tickets.status.${ticket.status.toLowerCase().replace(' ', '')}`)}
-                  </motion.p>
-                </td>
-                <td 
-                  className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
-                  onClick={() => setSelectedTicket(ticket)}
-                >
-                  <motion.p
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    whileHover={{ scale: 1.05 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 25, delay: 0.2 }}
-                    className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${
-                      ticket.isDateSet
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}
-                  >
-                    {ticket.isDateSet
-                      ? t('tickets.table.dateSet')
-                      : t('tickets.table.dateNotSet')}
-                  </motion.p>
-                </td>
-                {isEngineer && (
-                  <td 
-                    className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
-                    onClick={() => setSelectedTicket(ticket)}
-                  >
-                    {ticket.noteStatus ? (
-                      <motion.p
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        whileHover={{ scale: 1.05 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 25, delay: 0.3 }}
-                        className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${
-                          ticket.noteStatus === 'Quotation Sent' ? 'bg-teal-100 text-teal-800' :
-                          ticket.noteStatus === 'Material Not Complete' ? 'bg-yellow-100 text-yellow-800' :
-                          ticket.noteStatus === 'Material Complete' ? 'bg-green-100 text-green-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}
+                  </div>
+
+                  {/* Ticket Details Section */}
+                  {selectedTicket.ticketDetails && (
+                    <div className="bg-blue-50 dark:bg-boxdark-2 rounded-lg p-5 border-l-4 border-primary">
+                      <h3 className="text-base font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                        <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Ticket Details
+                      </h3>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                        {selectedTicket.ticketDetails}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* People & Assignment Section */}
+                  <div className="bg-purple-50 dark:bg-meta-4 rounded-lg p-5">
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      People & Assignment
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {selectedTicket.sender && (
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Sender</label>
+                          <p className="text-base font-medium text-gray-900 dark:text-white mt-1">{selectedTicket.sender}</p>
+                        </div>
+                      )}
+                      {selectedTicket.responsible_engineer && (
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Assigned Engineer</label>
+                          <p className="text-base font-medium text-gray-900 dark:text-white mt-1">{selectedTicket.responsible_engineer}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Status & Timeline Section */}
+                  <div className="bg-green-50 dark:bg-meta-4 rounded-lg p-5">
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                      </svg>
+                      Status & Timeline
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Created At</label>
+                        <p className="text-sm text-gray-900 dark:text-white mt-1">
+                          {selectedTicket.createdAt?.toDate().toLocaleString()}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Date Status</label>
+                        <div className="mt-1">
+                          <span className={`
+                            inline-block px-3 py-1 text-xs font-semibold rounded-full
+                            ${selectedTicket.isDateSet ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}
+                          `}>
+                            {selectedTicket.isDateSet ? 'Date Set' : 'Date Not Set'}
+                          </span>
+                        </div>
+                      </div>
+                      {selectedTicket.noteStatus && (
+                        <div className="md:col-span-2">
+                          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Note Status</label>
+                          <div className="mt-1">
+                            <span className={`
+                              inline-block px-3 py-1.5 text-sm font-medium rounded-full
+                              ${selectedTicket.noteStatus === 'Quotation Sent' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200' :
+                                selectedTicket.noteStatus === 'Material Complete' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                selectedTicket.noteStatus === 'Material Not Complete' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                                'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}
+                            `}>
+                              {selectedTicket.noteStatus}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action Buttons Section */}
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    {/* Set Event Date Section */}
+                    <div className="relative flex-1">
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setShowDatePopup(!showDatePopup)}
+                        className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-white font-medium hover:bg-opacity-90 transition-all"
                       >
-                        {ticket.noteStatus}
-                      </motion.p>
-                    ) : (
-                      <motion.p 
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.3 }}
-                        className="text-gray-500 italic"
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Set Event Date
+                      </motion.button>
+
+                      {/* Responsive Popup */}
+                      <AnimatePresence>
+                        {showDatePopup && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-full sm:w-96 md:w-[28rem] z-50 bg-white dark:bg-boxdark rounded-xl shadow-2xl border border-gray-200 dark:border-strokedark p-6 max-h-[80vh] overflow-y-auto"
+                          >
+                            {/* Close button */}
+                            <button
+                              onClick={() => setShowDatePopup(false)}
+                              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                              Set Event Date
+                            </h3>
+
+                            {/* Team Selection */}
+                            <div className="mb-4">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Select Team
+                              </label>
+                              <select
+                                value={selectedTeam}
+                                onChange={(e) => setSelectedTeam(e.target.value)}
+                                className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
+                              >
+                                <option value="">Select a team</option>
+                                {teams.map((team) => (
+                                  <option key={team.id} value={team.id}>
+                                    {team.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Calendar */}
+                            <div className="mb-4 flex justify-center">
+                              <Calendar
+                                onChange={(value) => {
+                                  if (value instanceof Date) {
+                                    setSelectedDate(value);
+                                  } else if (Array.isArray(value) && value[0] instanceof Date) {
+                                    setSelectedDate(value[0]);
+                                  }
+                                }}
+                                value={selectedDate}
+                                className="rounded-lg border-0 shadow-sm"
+                                minDate={new Date()}
+                              />
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex flex-col sm:flex-row gap-3">
+                              <button
+                                onClick={() => setShowDatePopup(false)}
+                                className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-meta-4 transition-all"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={handleSaveEventDate}
+                                disabled={!selectedTeam || !selectedDate}
+                                className="flex-1 rounded-lg bg-primary py-2.5 px-4 font-medium text-white hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                              >
+                                Save Event
+                              </button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    {/* Edit Status & Severity Section */}
+                    <div className="relative flex-1">
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setShowStatusPopup(!showStatusPopup)}
+                        className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-meta-3 px-6 py-3 text-white font-medium hover:bg-opacity-90 transition-all"
                       >
-                        Not set
-                      </motion.p>
-                    )}
-                  </td>
-                )}
-                {isResponsibleEngineer && (
-                  <td 
-                    className="border-b border-[#eee] py-5 px-4 dark:border-strokedark cursor-pointer"
-                    onClick={() => setSelectedTicket(ticket)}
-                  >
-                    <p className="text-black dark:text-white">
-                      {ticket.responsible_engineer || t('tickets.table.unassigned')}
-                    </p>
-                  </td>
-                )}
-              </motion.tr>
-              ))
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        Edit Status & Severity
+                      </motion.button>
+
+                      {/* Responsive Popup */}
+                      <AnimatePresence>
+                        {showStatusPopup && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-full sm:w-96 z-50 bg-white dark:bg-boxdark rounded-xl shadow-2xl border border-gray-200 dark:border-strokedark p-6"
+                          >
+                            {/* Close button */}
+                            <button
+                              onClick={() => setShowStatusPopup(false)}
+                              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                              Edit Status & Severity
+                            </h3>
+
+                            {/* Status Selection */}
+                            <div className="mb-4">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Status
+                              </label>
+                              <select
+                                value={editStatus}
+                                onChange={(e) => setEditStatus(e.target.value)}
+                                className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
+                              >
+                                <option value="Open">Open</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="Resolved">Resolved</option>
+                              </select>
+                            </div>
+
+                            {/* Severity Selection */}
+                            <div className="mb-6">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Severity
+                              </label>
+                              <select
+                                value={editSeverity}
+                                onChange={(e) => setEditSeverity(e.target.value)}
+                                className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
+                              >
+                                <option value="Low">Low</option>
+                                <option value="Medium">Medium</option>
+                                <option value="High">High</option>
+                                <option value="Critical">Critical</option>
+                              </select>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex flex-col sm:flex-row gap-3">
+                              <button
+                                onClick={() => setShowStatusPopup(false)}
+                                className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-meta-4 transition-all"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={handleSaveStatusAndSeverity}
+                                disabled={!editStatus || !editSeverity}
+                                className="flex-1 rounded-lg bg-meta-3 py-2.5 px-4 font-medium text-white hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                              >
+                                Save Changes
+                              </button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                </motion.div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="empty"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="h-full flex items-center justify-center"
+              >
+                <div className="text-center">
+                  <svg className="w-20 h-20 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Select a Ticket</h3>
+                  <p className="text-gray-500 dark:text-gray-400">Click on a ticket from the list to view its details</p>
+                </div>
+              </motion.div>
             )}
-            </AnimatePresence>
-          </tbody>
-        </table>
-      </motion.div>
+          </AnimatePresence>
+        </motion.div>
+      </div>
     </div>
   );
 };
