@@ -1,0 +1,171 @@
+{
+  "schemas": [
+    [
+      {
+        "type": "text",
+        "position": { "x": 20, "y": 20 },
+        "content": "TICKET REPORT",
+        "width": 170,
+        "height": 15,
+        "fontSize": 24,
+        "fontColor": "#1a365d",
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "readOnly": true,
+        "name": "title"
+      },
+      {
+        "type": "text",
+        "position": { "x": 20, "y": 40 },
+        "content": "Generated on: ",
+        "width": 170,
+        "height": 8,
+        "fontSize": 10,
+        "fontColor": "#666666",
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "name": "generatedDate"
+      },
+      {
+        "type": "line",
+        "position": { "x": 20, "y": 52 },
+        "width": 170,
+        "height": 0.5,
+        "color": "#e2e8f0",
+        "readOnly": true,
+        "name": "divider1",
+        "content": ""
+      },
+      {
+        "type": "text",
+        "position": { "x": 20, "y": 58 },
+        "content": "Report Parameters",
+        "width": 170,
+        "height": 10,
+        "fontSize": 14,
+        "fontColor": "#2d3748",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "readOnly": true,
+        "name": "paramsLabel"
+      },
+      {
+        "type": "text",
+        "position": { "x": 20, "y": 70 },
+        "content": "Engineer: All",
+        "width": 85,
+        "height": 8,
+        "fontSize": 10,
+        "fontColor": "#4a5568",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "name": "engineerParam"
+      },
+      {
+        "type": "text",
+        "position": { "x": 105, "y": 70 },
+        "content": "Date Range: All",
+        "width": 85,
+        "height": 8,
+        "fontSize": 10,
+        "fontColor": "#4a5568",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "name": "dateRangeParam"
+      },
+      {
+        "type": "text",
+        "position": { "x": 20, "y": 80 },
+        "content": "Status: All",
+        "width": 85,
+        "height": 8,
+        "fontSize": 10,
+        "fontColor": "#4a5568",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "name": "statusParam"
+      },
+      {
+        "type": "text",
+        "position": { "x": 105, "y": 80 },
+        "content": "Severity: All",
+        "width": 85,
+        "height": 8,
+        "fontSize": 10,
+        "fontColor": "#4a5568",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "name": "severityParam"
+      },
+      {
+        "type": "text",
+        "position": { "x": 20, "y": 92 },
+        "content": "Total Tickets: 0",
+        "width": 170,
+        "height": 8,
+        "fontSize": 11,
+        "fontColor": "#2d3748",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "name": "totalTickets"
+      },
+      {
+        "type": "line",
+        "position": { "x": 20, "y": 104 },
+        "width": 170,
+        "height": 0.5,
+        "color": "#e2e8f0",
+        "readOnly": true,
+        "name": "divider2",
+        "content": ""
+      },
+      {
+        "type": "table",
+        "position": { "x": 20, "y": 110 },
+        "width": 170,
+        "height": 150,
+        "content": "[[\"TKT-001\",\"Sample Ticket\",\"Company A\",\"Open\",\"High\"]]",
+        "showHead": true,
+        "head": ["ID", "Title", "Company", "Status", "Severity"],
+        "headWidthPercentages": [12, 38, 20, 15, 15],
+        "tableStyles": {
+          "borderWidth": 0.1,
+          "borderColor": "#e2e8f0"
+        },
+        "headStyles": {
+          "fontSize": 10,
+          "fontColor": "#ffffff",
+          "backgroundColor": "#3182ce",
+          "alignment": "center",
+          "verticalAlignment": "middle",
+          "lineHeight": 1,
+          "borderColor": "#3182ce",
+          "borderWidth": { "top": 0, "right": 0, "bottom": 0, "left": 0 },
+          "padding": { "top": 5, "right": 3, "bottom": 5, "left": 3 }
+        },
+        "bodyStyles": {
+          "fontSize": 9,
+          "fontColor": "#2d3748",
+          "backgroundColor": "",
+          "alternateBackgroundColor": "#f7fafc",
+          "alignment": "center",
+          "verticalAlignment": "middle",
+          "lineHeight": 1,
+          "borderColor": "#e2e8f0",
+          "borderWidth": { "top": 0.1, "right": 0, "bottom": 0.1, "left": 0 },
+          "padding": { "top": 4, "right": 3, "bottom": 4, "left": 3 }
+        },
+        "columnStyles": {
+          "alignment": { "1": "left" }
+        },
+        "name": "ticketsTable"
+      }
+    ]
+  ],
+  "basePdf": {
+    "width": 210,
+    "height": 297,
+    "padding": [10, 10, 10, 10]
+  },
+  "pdfmeVersion": "5.0.0"
+}

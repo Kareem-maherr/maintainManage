@@ -1,0 +1,389 @@
+{
+    "author": "Devin AI",
+    "schemas": [
+        [
+            {
+                "type": "svg",
+                "position": {
+                    "x": 20,
+                    "y": 20
+                },
+                "content": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 271 264\"><path fill=\"#8d2121\" fill-rule=\"evenodd\" d=\"m141.5 3.5q47.53-2.25 85 26.5 31.37 0.93 44 29.5-0.5 0.5-1 1-50.8-14.31-84.5 26-29 44 0 88 15.77 20.25 40.5 27.5-15.11 26.11-40.5 42.5-57.37-34.95-59.5-102.5 1.03-22.17 9-43-0.17-2.58-1.5-0.5-38.33 77.84 14 147 5.52 5.27 10.5 11-11.06 4.36-23 5.5-19.74 1.74-39-2.5-38-69.01-11.5-143 9.81-26.13 28-47 1-1 0-2-63.11 64.83-50 155 3.03 14.12 6 28-29.71-15.71-48-44-12.35-45.06 11-86 4.17-6.68 9.5-12.5-14.13 9.15-22.5 24.5-8.79 17.11-12.5 36-6.08-26.51 0.5-53 7.77-23.56 28.5-37-5.96-1.04-12-0.5 14.73-21.38 40-28-4.42-1.46-9-2.5 29.38-21.21 66-22.5-10.4-6.98-23-8 21.49-10.74 45-13.5zm66 35q4.11-1.84 7-5.5-9.05-2.16-18-4.5 3.57 7.07 11 10z\"/></svg>",
+                "width": 15,
+                "height": 15,
+                "readOnly": true,
+                "name": "logo"
+            },
+            {
+                "type": "text",
+                "position": {
+                    "x": 120.13,
+                    "y": 20
+                },
+                "content": "Tickets Report",
+                "width": 69.87,
+                "height": 22.68,
+                "rotate": 0,
+                "alignment": "right",
+                "verticalAlignment": "middle",
+                "fontSize": 40,
+                "lineHeight": 1,
+                "characterSpacing": 0,
+                "fontColor": "#000000",
+                "backgroundColor": "",
+                "opacity": 1,
+                "readOnly": true,
+                "fontName": "",
+                "name": "head"
+            },
+            {
+                "type": "text",
+                "position": {
+                    "x": 20,
+                    "y": 57.88
+                },
+                "content": "Prepared for:",
+                "width": 84.69,
+                "height": 9.42,
+                "rotate": 0,
+                "alignment": "left",
+                "verticalAlignment": "top",
+                "fontSize": 13,
+                "lineHeight": 1,
+                "characterSpacing": 0,
+                "fontColor": "#000000",
+                "backgroundColor": "",
+                "opacity": 1,
+                "readOnly": true,
+                "fontName": "",
+                "name": "preparedForLabel"
+            },
+            {
+                "type": "text",
+                "content": "",
+                "position": {
+                    "x": 20,
+                    "y": 67.94
+                },
+                "width": 84.95,
+                "height": 34.07,
+                "rotate": 0,
+                "alignment": "left",
+                "verticalAlignment": "top",
+                "fontSize": 13,
+                "lineHeight": 1,
+                "characterSpacing": 0,
+                "fontColor": "#000000",
+                "backgroundColor": "",
+                "opacity": 1,
+                "dynamicFontSize": {
+                    "min": 3,
+                    "max": 13,
+                    "fit": "vertical"
+                },
+                "fontName": "",
+                "name": "preparedForInput"
+            },
+            {
+                "type": "multiVariableText",
+                "position": {
+                    "x": 119.87,
+                    "y": 67.88
+                },
+                "content": "",
+                "width": 70.13,
+                "height": 33.52,
+                "rotate": 0,
+                "alignment": "right",
+                "verticalAlignment": "top",
+                "fontSize": 13,
+                "lineHeight": 1.5,
+                "characterSpacing": 0,
+                "fontColor": "#000000",
+                "backgroundColor": "",
+                "opacity": 1,
+                "strikethrough": false,
+                "underline": false,
+                "text": "",
+                "variables": [
+                ],
+                "fontName": "",
+                "name": "quoteInfo"
+            },
+            {
+                "type": "table",
+                "position": {
+                    "x": 20,
+                    "y": 110.81
+                },
+                "width": 170,
+                "height": 45.75920000000001,
+                "content": "[[\"Eggshell Camisole Top\",\"1\",\"123\",\"123\"],[\"Cuban Collar Shirt\",\"2\",\"127\",\"254\"]]",
+                "showHead": true,
+                "head": [
+                    "Item",
+                    "Quantity",
+                    "Unit Price",
+                    "Total"
+                ],
+                "headWidthPercentages": [
+                    49.538325694806396,
+                    17.962830593295262,
+                    19.26354959425127,
+                    13.23529411764708
+                ],
+                "fontName": "",
+                "tableStyles": {
+                    "borderWidth": 0,
+                    "borderColor": "#000000"
+                },
+                "headStyles": {
+                    "fontName": "",
+                    "fontSize": 10,
+                    "characterSpacing": 0,
+                    "alignment": "center",
+                    "verticalAlignment": "middle",
+                    "lineHeight": 1,
+                    "fontColor": "#000000",
+                    "borderColor": "#000000",
+                    "backgroundColor": "",
+                    "borderWidth": {
+                        "top": 0.1,
+                        "right": 0,
+                        "bottom": 0,
+                        "left": 0
+                    },
+                    "padding": {
+                        "top": 5,
+                        "right": 5,
+                        "bottom": 5,
+                        "left": 5
+                    }
+                },
+                "bodyStyles": {
+                    "fontName": "",
+                    "fontSize": 9,
+                    "characterSpacing": 0,
+                    "alignment": "center",
+                    "verticalAlignment": "middle",
+                    "lineHeight": 1,
+                    "fontColor": "#000000",
+                    "borderColor": "#000000",
+                    "backgroundColor": "",
+                    "alternateBackgroundColor": "",
+                    "borderWidth": {
+                        "top": 0.1,
+                        "right": 0,
+                        "bottom": 0.1,
+                        "left": 0
+                    },
+                    "padding": {
+                        "top": 6,
+                        "right": 5,
+                        "bottom": 5,
+                        "left": 5
+                    }
+                },
+                "columnStyles": {
+                    "alignment": {
+                        "0": "left",
+                        "3": "right"
+                    }
+                },
+                "name": "orders",
+                "readOnly": false
+            },
+            {
+                "type": "text",
+                "position": {
+                    "x": 20,
+                    "y": 160
+                },
+                "content": "Thank you for your interest!",
+                "width": 170,
+                "height": 20,
+                "rotate": 0,
+                "alignment": "left",
+                "verticalAlignment": "top",
+                "fontSize": 20,
+                "lineHeight": 1,
+                "characterSpacing": 0,
+                "fontColor": "#000000",
+                "fontName": "",
+                "backgroundColor": "",
+                "opacity": 1,
+                "readOnly": true,
+                "name": "thankyou"
+            },
+            {
+                "type": "text",
+                "position": {
+                    "x": 20,
+                    "y": 232.67
+                },
+                "content": "Terms & Conditions",
+                "width": 84.69,
+                "height": 9.42,
+                "rotate": 0,
+                "alignment": "left",
+                "verticalAlignment": "top",
+                "fontSize": 13,
+                "lineHeight": 1,
+                "characterSpacing": 0,
+                "fontColor": "#000000",
+                "backgroundColor": "",
+                "opacity": 1,
+                "readOnly": true,
+                "fontName": "",
+                "name": "termsLabel"
+            },
+            {
+                "type": "text",
+                "content": "This quote is valid for 30 days from the date of issue.\nPayment terms: 50% deposit required to confirm order.\nDelivery: 2-3 weeks after order confirmation.\nPrices subject to change without notice.",
+                "position": {
+                    "x": 20,
+                    "y": 242.83
+                },
+                "width": 84.95,
+                "height": 34.07,
+                "rotate": 0,
+                "alignment": "left",
+                "verticalAlignment": "top",
+                "fontSize": 13,
+                "lineHeight": 1,
+                "characterSpacing": 0,
+                "fontColor": "#000000",
+                "backgroundColor": "",
+                "opacity": 1,
+                "dynamicFontSize": {
+                    "min": 3,
+                    "max": 13,
+                    "fit": "vertical"
+                },
+                "fontName": "",
+                "name": "termsInput"
+            },
+            {
+                "type": "text",
+                "position": {
+                    "x": 119.33,
+                    "y": 248.39
+                },
+                "content": "",
+                "width": 70.67,
+                "height": 8.36,
+                "rotate": 0,
+                "alignment": "right",
+                "verticalAlignment": "top",
+                "fontSize": 18,
+                "lineHeight": 1,
+                "characterSpacing": 0,
+                "fontColor": "#000000",
+                "backgroundColor": "",
+                "opacity": 1,
+                "readOnly": true,
+                "fontName": "",
+                "name": "shopName"
+            },
+            {
+                "type": "text",
+                "position": {
+                    "x": 107.69,
+                    "y": 256.9
+                },
+                "content": "",
+                "width": 82.31,
+                "height": 20,
+                "rotate": 0,
+                "alignment": "right",
+                "verticalAlignment": "top",
+                "fontSize": 13,
+                "lineHeight": 1,
+                "characterSpacing": 0,
+                "fontColor": "#000000",
+                "backgroundColor": "",
+                "opacity": 1,
+                "readOnly": true,
+                "fontName": "",
+                "name": "shopAddress"
+            }
+        ]
+    ],
+    "basePdf": {
+        "width": 210,
+        "height": 297,
+        "padding": [
+            20,
+            20,
+            20,
+            20
+        ],
+        "staticSchema": [
+            {
+                "name": "line",
+                "type": "line",
+                "position": {
+                    "x": 20,
+                    "y": 279
+                },
+                "width": 170,
+                "height": 0.2,
+                "rotate": 0,
+                "opacity": 1,
+                "readOnly": true,
+                "color": "#999999",
+                "required": false,
+                "content": ""
+            },
+            {
+                "name": "footerInfo",
+                "type": "text",
+                "content": "",
+                "position": {
+                    "x": 20,
+                    "y": 282
+                },
+                "width": 122.51,
+                "height": 10,
+                "rotate": 0,
+                "alignment": "left",
+                "verticalAlignment": "middle",
+                "fontSize": 13,
+                "lineHeight": 1,
+                "characterSpacing": 0,
+                "fontColor": "#000000",
+                "backgroundColor": "",
+                "opacity": 1,
+                "strikethrough": false,
+                "underline": false,
+                "required": false,
+                "readOnly": true
+            },
+            {
+                "name": "pageNumber",
+                "type": "text",
+                "content": "Page {currentPage} of {totalPages}",
+                "position": {
+                    "x": 145,
+                    "y": 282
+                },
+                "width": 45,
+                "height": 10,
+                "rotate": 0,
+                "alignment": "right",
+                "verticalAlignment": "middle",
+                "fontSize": 13,
+                "lineHeight": 1,
+                "characterSpacing": 0,
+                "fontColor": "#000000",
+                "backgroundColor": "",
+                "opacity": 1,
+                "strikethrough": false,
+                "underline": false,
+                "required": false,
+                "readOnly": true
+            }
+        ]
+    },
+    "pdfmeVersion": "5.0.0"
+}

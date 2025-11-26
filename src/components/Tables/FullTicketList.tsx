@@ -20,6 +20,9 @@ import { getAuth } from 'firebase/auth';
 import { useLanguage } from '../../contexts/LanguageContext';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
+import { generate } from '@pdfme/generator';
+import { text, line, table, svg, multiVariableText } from '@pdfme/schemas';
+import ticketReportTemplate from '../../assets/docs/template.json';
 
 interface FullTicket {
   id: string;
@@ -90,6 +93,17 @@ const FullTicketList = () => {
   const [showStatusPopup, setShowStatusPopup] = useState(false);
   const [editStatus, setEditStatus] = useState<string>('');
   const [editSeverity, setEditSeverity] = useState<string>('');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [pdfParams, setPdfParams] = useState({
+    engineer: '',
+    startDate: '',
+    endDate: '',
+    status: '',
+    severity: '',
+  });
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [engineers, setEngineers] = useState<string[]>([]);
   const auth = getAuth();
   const { t } = useLanguage();
 
@@ -461,6 +475,155 @@ const FullTicketList = () => {
     fetchTeams();
   }, [userEmail]);
 
+  // Fetch engineers for PDF filter
+  useEffect(() => {
+    const fetchEngineers = async () => {
+      const uniqueEngineers = [...new Set(tickets.map(t => t.responsible_engineer).filter(Boolean))];
+      setEngineers(uniqueEngineers as string[]);
+    };
+    fetchEngineers();
+  }, [tickets]);
+
+  // Generate PDF report
+  const handleGeneratePdf = async () => {
+    setGeneratingPdf(true);
+    try {
+      // Filter tickets based on PDF params
+      let filteredForPdf = [...tickets];
+      
+      if (pdfParams.engineer) {
+        filteredForPdf = filteredForPdf.filter(t => t.responsible_engineer === pdfParams.engineer);
+      }
+      if (pdfParams.status) {
+        filteredForPdf = filteredForPdf.filter(t => t.status === pdfParams.status);
+      }
+      if (pdfParams.severity) {
+        filteredForPdf = filteredForPdf.filter(t => t.severity === pdfParams.severity);
+      }
+      if (pdfParams.startDate) {
+        const startDate = new Date(pdfParams.startDate);
+        filteredForPdf = filteredForPdf.filter(t => {
+          if (!t.createdAt) return false;
+          return t.createdAt.toDate() >= startDate;
+        });
+      }
+      if (pdfParams.endDate) {
+        const endDate = new Date(pdfParams.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        filteredForPdf = filteredForPdf.filter(t => {
+          if (!t.createdAt) return false;
+          return t.createdAt.toDate() <= endDate;
+        });
+      }
+
+      // Prepare table data for the orders table (adapting quote template)
+      const tableData = filteredForPdf.map(ticket => [
+        ticket.readableId || ticket.id.slice(0, 8),
+        ticket.title.length > 30 ? ticket.title.slice(0, 27) + '...' : ticket.title,
+        ticket.company.length > 15 ? ticket.company.slice(0, 12) + '...' : ticket.company,
+        ticket.status
+      ]);
+
+      // Build date range string
+      let dateRangeStr = 'All Dates';
+      if (pdfParams.startDate || pdfParams.endDate) {
+        const start = pdfParams.startDate ? new Date(pdfParams.startDate).toLocaleDateString() : 'Start';
+        const end = pdfParams.endDate ? new Date(pdfParams.endDate).toLocaleDateString() : 'Present';
+        dateRangeStr = `${start} - ${end}`;
+      }
+
+      // Build filter info string
+      const filterInfo = [
+        `Engineer: ${pdfParams.engineer || 'All'}`,
+        `Status: ${pdfParams.status || 'All'}`,
+        `Severity: ${pdfParams.severity || 'All'}`,
+        `Date Range: ${dateRangeStr}`
+      ].join('\n');
+
+      // Create inputs matching the quote template field names
+      const inputs = [{
+        head: 'TICKET REPORT',
+        preparedForInput: filterInfo,
+        quoteInfo: JSON.stringify({
+          QuoteNo: filteredForPdf.length.toString(),
+          Date: new Date().toLocaleDateString(),
+          ValidUntil: 'N/A'
+        }),
+        orders: JSON.stringify(tableData.length > 0 ? tableData : [['No tickets', '-', '-', '-']]),
+        subtotal: filteredForPdf.length.toString(),
+        taxInput: JSON.stringify({ rate: '0' }),
+        tax: '0',
+        total: filteredForPdf.length.toString(),
+        thankyou: `Total: ${filteredForPdf.length} ticket(s)`,
+        termsInput: `Report generated on ${new Date().toLocaleString()}\nFilters applied to ticket data.`,
+        shopName: 'Arab Emergency',
+        shopAddress: 'Ticket Management System'
+      }];
+
+      // Clone template and modify for ticket report
+      const modifiedTemplate = JSON.parse(JSON.stringify(ticketReportTemplate));
+      
+      // Update table headers for tickets
+      const ordersSchema = modifiedTemplate.schemas[0].find((s: any) => s.name === 'orders');
+      if (ordersSchema) {
+        ordersSchema.head = ['ID', 'Title', 'Company', 'Status'];
+        ordersSchema.headWidthPercentages = [15, 45, 25, 15];
+      }
+
+      // Update labels
+      const preparedForLabel = modifiedTemplate.schemas[0].find((s: any) => s.name === 'preparedForLabel');
+      if (preparedForLabel) {
+        preparedForLabel.content = 'Report Filters:';
+      }
+
+      const termsLabel = modifiedTemplate.schemas[0].find((s: any) => s.name === 'termsLabel');
+      if (termsLabel) {
+        termsLabel.content = 'Report Info';
+      }
+
+      const subtotalLabel = modifiedTemplate.schemas[0].find((s: any) => s.name === 'subtotalLabel');
+      if (subtotalLabel) {
+        subtotalLabel.content = 'Tickets';
+      }
+
+      const totalLabel = modifiedTemplate.schemas[0].find((s: any) => s.name === 'totalLabel');
+      if (totalLabel) {
+        totalLabel.content = 'Total';
+      }
+
+      const template = {
+        ...modifiedTemplate,
+        schemas: modifiedTemplate.schemas as any,
+        basePdf: modifiedTemplate.basePdf as any,
+      };
+
+      const plugins = { text, line, table, svg, multiVariableText };
+
+      const pdf = await generate({
+        template,
+        inputs,
+        plugins,
+      });
+
+      // Download the PDF
+      const blob = new Blob([pdf.buffer as BlobPart], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ticket-report-${new Date().toISOString().split('T')[0]}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      setShowPdfModal(false);
+      setPdfParams({ engineer: '', startDate: '', endDate: '', status: '', severity: '' });
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
+
   // Initialize edit values when ticket is selected
   useEffect(() => {
     if (selectedTicket) {
@@ -577,9 +740,181 @@ const FullTicketList = () => {
           className="w-1/3 bg-white dark:bg-boxdark rounded-xl shadow-sm overflow-hidden flex flex-col"
         >
           <div className="p-4 border-b border-gray-200 dark:border-strokedark">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              All Tickets ({filteredTickets.length})
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                All Tickets ({filteredTickets.length})
+              </h3>
+              <div className="flex items-center gap-2">
+                {/* PDF Report Button */}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowPdfModal(true)}
+                  className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                  title="Generate PDF Report"
+                >
+                  <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 9h1m-1 4h6m-6 4h6" />
+                  </svg>
+                </motion.button>
+
+                {/* Filter Button */}
+                <div className="relative">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                    className={`p-2 rounded-lg transition-colors relative ${
+                      filters.company || filters.status || filters.severity || filters.location
+                        ? 'bg-primary/20 hover:bg-primary/30'
+                        : 'bg-gray-100 dark:bg-meta-4 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    <svg className={`w-5 h-5 ${
+                      filters.company || filters.status || filters.severity || filters.location
+                        ? 'text-primary'
+                        : 'text-gray-600 dark:text-gray-300'
+                    }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
+                    {(filters.company || filters.status || filters.severity || filters.location) && (
+                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full"></span>
+                    )}
+                  </motion.button>
+                
+                <AnimatePresence>
+                  {showFilterDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 mt-2 w-64 bg-white dark:bg-boxdark rounded-lg shadow-lg border border-gray-200 dark:border-strokedark z-50 overflow-hidden max-h-[70vh] overflow-y-auto"
+                    >
+                      <div className="p-3 space-y-4">
+                        {/* Sort Section */}
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1 mb-2">
+                            Sort by Date
+                          </p>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => setFilters(prev => ({ ...prev, sort: 'newest' }))}
+                              className={`flex-1 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                                filters.sort === 'newest'
+                                  ? 'bg-primary text-white'
+                                  : 'bg-gray-100 dark:bg-meta-4 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                              }`}
+                            >
+                              Newest
+                            </button>
+                            <button
+                              onClick={() => setFilters(prev => ({ ...prev, sort: 'oldest' }))}
+                              className={`flex-1 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                                filters.sort === 'oldest'
+                                  ? 'bg-primary text-white'
+                                  : 'bg-gray-100 dark:bg-meta-4 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                              }`}
+                            >
+                              Oldest
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Company Filter */}
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1 mb-1 block">
+                            Company
+                          </label>
+                          <select
+                            value={filters.company}
+                            onChange={(e) => setFilters(prev => ({ ...prev, company: e.target.value }))}
+                            className="w-full px-2 py-1.5 text-sm rounded-md border border-gray-200 dark:border-strokedark bg-white dark:bg-meta-4 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                          >
+                            <option value="">All Companies</option>
+                            {companies.filter(c => c !== 'All').map((company) => (
+                              <option key={company} value={company}>{company}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Status Filter */}
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1 mb-1 block">
+                            Status
+                          </label>
+                          <select
+                            value={filters.status}
+                            onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                            className="w-full px-2 py-1.5 text-sm rounded-md border border-gray-200 dark:border-strokedark bg-white dark:bg-meta-4 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                          >
+                            <option value="">All Statuses</option>
+                            <option value="Open">Open</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Resolved">Resolved</option>
+                          </select>
+                        </div>
+
+                        {/* Severity Filter */}
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1 mb-1 block">
+                            Severity
+                          </label>
+                          <select
+                            value={filters.severity}
+                            onChange={(e) => setFilters(prev => ({ ...prev, severity: e.target.value }))}
+                            className="w-full px-2 py-1.5 text-sm rounded-md border border-gray-200 dark:border-strokedark bg-white dark:bg-meta-4 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                          >
+                            <option value="">All Severities</option>
+                            <option value="Critical">Critical</option>
+                            <option value="High">High</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Low">Low</option>
+                          </select>
+                        </div>
+
+                        {/* Location Filter */}
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1 mb-1 block">
+                            Location
+                          </label>
+                          <select
+                            value={filters.location}
+                            onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))}
+                            className="w-full px-2 py-1.5 text-sm rounded-md border border-gray-200 dark:border-strokedark bg-white dark:bg-meta-4 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                          >
+                            <option value="">All Locations</option>
+                            {locations.filter(l => l !== 'All').map((location) => (
+                              <option key={location} value={location}>{location}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Clear Filters Button */}
+                        {(filters.company || filters.status || filters.severity || filters.location) && (
+                          <button
+                            onClick={() => {
+                              setFilters(prev => ({
+                                ...prev,
+                                company: '',
+                                status: '',
+                                severity: '',
+                                location: ''
+                              }));
+                            }}
+                            className="w-full px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                          >
+                            Clear Filters
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                </div>
+              </div>
+            </div>
           </div>
           
           <div className="flex-1 overflow-y-auto">
@@ -1044,6 +1379,160 @@ const FullTicketList = () => {
           </AnimatePresence>
         </motion.div>
       </div>
+
+      {/* PDF Report Modal */}
+      <AnimatePresence>
+        {showPdfModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+            onClick={() => setShowPdfModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white dark:bg-boxdark rounded-xl shadow-2xl p-6 w-full max-w-md mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  Generate PDF Report
+                </h3>
+                <button
+                  onClick={() => setShowPdfModal(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Engineer Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Responsible Engineer
+                  </label>
+                  <select
+                    value={pdfParams.engineer}
+                    onChange={(e) => setPdfParams(prev => ({ ...prev, engineer: e.target.value }))}
+                    className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
+                  >
+                    <option value="">All Engineers</option>
+                    {engineers.map((engineer) => (
+                      <option key={engineer} value={engineer}>{engineer}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Date Range */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={pdfParams.startDate}
+                      onChange={(e) => setPdfParams(prev => ({ ...prev, startDate: e.target.value }))}
+                      className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      End Date
+                    </label>
+                    <input
+                      type="date"
+                      value={pdfParams.endDate}
+                      onChange={(e) => setPdfParams(prev => ({ ...prev, endDate: e.target.value }))}
+                      className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
+                    />
+                  </div>
+                </div>
+
+                {/* Status Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Status
+                  </label>
+                  <select
+                    value={pdfParams.status}
+                    onChange={(e) => setPdfParams(prev => ({ ...prev, status: e.target.value }))}
+                    className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="Open">Open</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Resolved">Resolved</option>
+                  </select>
+                </div>
+
+                {/* Severity Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Severity
+                  </label>
+                  <select
+                    value={pdfParams.severity}
+                    onChange={(e) => setPdfParams(prev => ({ ...prev, severity: e.target.value }))}
+                    className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
+                  >
+                    <option value="">All Severities</option>
+                    <option value="Critical">Critical</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowPdfModal(false);
+                    setPdfParams({ engineer: '', startDate: '', endDate: '', status: '', severity: '' });
+                  }}
+                  className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-meta-4 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleGeneratePdf}
+                  disabled={generatingPdf}
+                  className="flex-1 rounded-lg bg-red-500 py-2.5 px-4 font-medium text-white hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                >
+                  {generatingPdf ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Generate PDF
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
