@@ -156,25 +156,30 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
     };
   }, []);
 
-  // Generate a ticket ID from sender email and random number
-  const generateTicketId = (senderEmail: string) => {
-    // Extract the part before @ in the email
-    const senderName = senderEmail.split('@')[0] || 'unknown';
+  // Generate a ticket ID from company name and random number
+  const generateTicketId = (company: string) => {
+    // Extract first 3-5 characters from company name (uppercase, letters only)
+    const companyPrefix = company
+      .toUpperCase()
+      .replace(/[^A-Z]/g, '') // Remove non-letter characters
+      .slice(0, 4) || 'TKT';
     // Generate a random 4-digit number
     const randomNum = Math.floor(1000 + Math.random() * 9000);
-    return `${senderName}-${randomNum}`;
+    // Get current year's last 2 digits
+    const year = new Date().getFullYear().toString().slice(-2);
+    return `${companyPrefix}-${year}${randomNum}`;
   };
 
-  // Update ticket ID when sender changes
+  // Update ticket ID when company changes
   useEffect(() => {
-    if (ticketData.sender && ticketData.sender.includes('@')) {
-      const newTicketId = generateTicketId(ticketData.sender);
+    if (ticketData.company && ticketData.company.trim().length >= 2) {
+      const newTicketId = generateTicketId(ticketData.company);
       setTicketData(prev => ({
         ...prev,
         ticketId: newTicketId
       }));
     }
-  }, [ticketData.sender]);
+  }, [ticketData.company]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,8 +195,8 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
 
       // Generate ticket ID if not already set
       let ticketId = ticketData.ticketId;
-      if (!ticketId && ticketData.sender) {
-        ticketId = generateTicketId(ticketData.sender);
+      if (!ticketId && ticketData.company) {
+        ticketId = generateTicketId(ticketData.company);
       }
 
       const newTicket = {
@@ -305,7 +310,7 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ onClose }) => {
               className="w-full rounded border-[1.5px] border-stroke bg-transparent py-2 px-5 outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input bg-gray-100 cursor-not-allowed"
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Auto-generated from sender email and a random number
+              Auto-generated from company name
             </p>
           </div>
 

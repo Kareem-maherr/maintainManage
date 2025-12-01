@@ -14,14 +14,16 @@ import {
   limit,
   updateDoc,
   addDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../../config/firebase';
 import { getAuth } from 'firebase/auth';
 import { useLanguage } from '../../contexts/LanguageContext';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { generate } from '@pdfme/generator';
-import { text, line, table, svg, multiVariableText } from '@pdfme/schemas';
+import { text, line, table, svg, multiVariableText, image } from '@pdfme/schemas';
 import ticketReportTemplate from '../../assets/docs/template.json';
 
 interface FullTicket {
@@ -93,6 +95,8 @@ const FullTicketList = () => {
   const [showStatusPopup, setShowStatusPopup] = useState(false);
   const [editStatus, setEditStatus] = useState<string>('');
   const [editSeverity, setEditSeverity] = useState<string>('');
+  const [showNoteStatusPopup, setShowNoteStatusPopup] = useState(false);
+  const [editNoteStatus, setEditNoteStatus] = useState<string>('');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfParams, setPdfParams] = useState({
@@ -104,12 +108,128 @@ const FullTicketList = () => {
   });
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [engineers, setEngineers] = useState<string[]>([]);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creatingTicket, setCreatingTicket] = useState(false);
+  const [newTicketData, setNewTicketData] = useState({
+    subject: '',
+    sender: '',
+    company: '',
+    city: '',
+    severity: 'Low',
+    contractCode: '',
+    contractNumber: '',
+    branchLocation: '',
+    issueDescription: '',
+    attachment: null as File | null,
+  });
   const auth = getAuth();
   const { t } = useLanguage();
 
+  // Generate ticket ID from company name
+  const generateTicketId = (company: string) => {
+    const companyPrefix = company
+      .toUpperCase()
+      .replace(/[^A-Z]/g, '')
+      .slice(0, 4) || 'TKT';
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const year = new Date().getFullYear().toString().slice(-2);
+    return `${companyPrefix}-${year}${randomNum}`;
+  };
+
+  // Handle create ticket submission
+  const handleCreateTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (creatingTicket) return;
+
+    try {
+      setCreatingTicket(true);
+      const user = auth.currentUser;
+      if (!user) {
+        console.error('No user logged in');
+        return;
+      }
+
+      const ticketId = generateTicketId(newTicketData.company);
+
+      let attachmentUrl = '';
+      if (newTicketData.attachment) {
+        const storageRef = ref(storage, `tickets/${ticketId}/${newTicketData.attachment.name}`);
+        await uploadBytes(storageRef, newTicketData.attachment);
+        attachmentUrl = await getDownloadURL(storageRef);
+      }
+
+      const newTicket = {
+        title: newTicketData.subject,
+        sender: newTicketData.sender,
+        company: newTicketData.company,
+        location: newTicketData.city,
+        severity: newTicketData.severity,
+        contractCode: newTicketData.contractCode,
+        projectNumber: newTicketData.contractNumber,
+        branch: newTicketData.branchLocation,
+        ticketDetails: newTicketData.issueDescription,
+        attachmentUrl: attachmentUrl,
+        status: 'Open',
+        createdAt: serverTimestamp(),
+        createdBy: user.uid,
+        ticketId: ticketId,
+        isDateSet: false,
+        isViewed: false,
+        responsible_engineer: isEngineer ? userEmail : '',
+      };
+
+      await addDoc(collection(db, 'tickets'), newTicket);
+
+      // Reset form and close modal
+      setNewTicketData({
+        subject: '',
+        sender: '',
+        company: '',
+        city: '',
+        severity: 'Low',
+        contractCode: '',
+        contractNumber: '',
+        branchLocation: '',
+        issueDescription: '',
+        attachment: null,
+      });
+      setShowCreateModal(false);
+    } catch (error) {
+      console.error('Error creating ticket:', error);
+      alert('Failed to create ticket. Please try again.');
+    } finally {
+      setCreatingTicket(false);
+    }
+  };
+
   // Handle ticket selection
-  const handleSelectTicket = (ticket: FullTicket) => {
-    setSelectedTicket(selectedTicket?.id === ticket.id ? null : ticket);
+  const handleSelectTicket = async (ticket: FullTicket) => {
+    // Toggle selection
+    if (selectedTicket?.id === ticket.id) {
+      setSelectedTicket(null);
+      return;
+    }
+    
+    setSelectedTicket(ticket);
+    
+    // Mark ticket as viewed in Firestore if not already viewed
+    if (!ticket.isViewed) {
+      try {
+        const ticketRef = doc(db, 'tickets', ticket.id);
+        await updateDoc(ticketRef, {
+          isViewed: true
+        });
+        
+        // Update local state to reflect the change
+        setTickets(prevTickets =>
+          prevTickets.map(t =>
+            t.id === ticket.id ? { ...t, isViewed: true } : t
+          )
+        );
+      } catch (error) {
+        console.error('Error marking ticket as viewed:', error);
+      }
+    }
   };
 
   const severityOptions = [
@@ -353,15 +473,9 @@ const FullTicketList = () => {
     });
   };
 
-  // Generate a ticket ID from sender email and random number
-  const generateTicketId = (ticket: FullTicket) => {
-    // Get the sender email from the ticket
-    const senderEmail = ticket.sender || userEmail || 'unknown';
-    // Extract the part before @ in the email
-    const senderName = senderEmail.split('@')[0] || 'user';
-    // Generate a random 4-digit number
-    const randomNum = Math.floor(1000 + Math.random() * 9000);
-    return `${senderName}-${randomNum}`;
+  // Generate a ticket ID from ticket's company name
+  const generateTicketIdFromTicket = (ticket: FullTicket) => {
+    return generateTicketId(ticket.company || 'Unknown');
   };
 
   // Handle click on Unknown ticket ID to generate a new readable ID
@@ -374,7 +488,7 @@ const FullTicketList = () => {
     
     try {
       setGeneratingId(ticket.id);
-      const newTicketId = generateTicketId(ticket);
+      const newTicketId = generateTicketIdFromTicket(ticket);
       
       // Update the ticket in Firestore
       const ticketRef = doc(db, 'tickets', ticket.id);
@@ -516,88 +630,59 @@ const FullTicketList = () => {
         });
       }
 
-      // Prepare table data for the orders table (adapting quote template)
-      const tableData = filteredForPdf.map(ticket => [
-        ticket.readableId || ticket.id.slice(0, 8),
-        ticket.title.length > 30 ? ticket.title.slice(0, 27) + '...' : ticket.title,
-        ticket.company.length > 15 ? ticket.company.slice(0, 12) + '...' : ticket.company,
-        ticket.status
-      ]);
+      // Build filter range data for the template
+      // Columns: Filter Type, Value
+      const filterRangeData = [
+        ['Date Range', pdfParams.startDate && pdfParams.endDate 
+          ? `${new Date(pdfParams.startDate).toLocaleDateString()} - ${new Date(pdfParams.endDate).toLocaleDateString()}`
+          : pdfParams.startDate 
+            ? `From ${new Date(pdfParams.startDate).toLocaleDateString()}`
+            : pdfParams.endDate
+              ? `Until ${new Date(pdfParams.endDate).toLocaleDateString()}`
+              : 'All Dates'],
+        ['Engineer', pdfParams.engineer || 'All Engineers'],
+        ['Status', pdfParams.status || 'All Statuses'],
+        ['Severity', pdfParams.severity || 'All Severities'],
+        ['Total Tickets', filteredForPdf.length.toString()]
+      ];
 
-      // Build date range string
-      let dateRangeStr = 'All Dates';
-      if (pdfParams.startDate || pdfParams.endDate) {
-        const start = pdfParams.startDate ? new Date(pdfParams.startDate).toLocaleDateString() : 'Start';
-        const end = pdfParams.endDate ? new Date(pdfParams.endDate).toLocaleDateString() : 'Present';
-        dateRangeStr = `${start} - ${end}`;
-      }
+      // Prepare ticket table data for the template
+      // Columns: Ticket ID, Company, Created, Status, Severity, Engineer
+      const ticketTableData = filteredForPdf.map(ticket => {
+        const createdDate = ticket.createdAt?.toDate?.() 
+          ? ticket.createdAt.toDate().toLocaleDateString() 
+          : 'N/A';
+        return [
+          ticket.readableId || ticket.id.slice(0, 8),
+          ticket.company || 'N/A',
+          createdDate,
+          ticket.status || 'N/A',
+          ticket.severity || 'N/A',
+          ticket.responsible_engineer || 'Unassigned'
+        ];
+      });
 
-      // Build filter info string
-      const filterInfo = [
-        `Engineer: ${pdfParams.engineer || 'All'}`,
-        `Status: ${pdfParams.status || 'All'}`,
-        `Severity: ${pdfParams.severity || 'All'}`,
-        `Date Range: ${dateRangeStr}`
-      ].join('\n');
-
-      // Create inputs matching the quote template field names
+      // Create inputs matching the template field names
+      // Include text fields (field1, field4, field6) and table fields (filter_range, ticket_table)
       const inputs = [{
-        head: 'TICKET REPORT',
-        preparedForInput: filterInfo,
-        quoteInfo: JSON.stringify({
-          QuoteNo: filteredForPdf.length.toString(),
-          Date: new Date().toLocaleDateString(),
-          ValidUntil: 'N/A'
-        }),
-        orders: JSON.stringify(tableData.length > 0 ? tableData : [['No tickets', '-', '-', '-']]),
-        subtotal: filteredForPdf.length.toString(),
-        taxInput: JSON.stringify({ rate: '0' }),
-        tax: '0',
-        total: filteredForPdf.length.toString(),
-        thankyou: `Total: ${filteredForPdf.length} ticket(s)`,
-        termsInput: `Report generated on ${new Date().toLocaleString()}\nFilters applied to ticket data.`,
-        shopName: 'Arab Emergency',
-        shopAddress: 'Ticket Management System'
+        field1: 'Filter Information',
+        field4: 'Ticket Table',
+        field6: 'Ticket Report',
+        filter_range: JSON.stringify(filterRangeData),
+        ticket_table: JSON.stringify(ticketTableData.length > 0 ? ticketTableData : [['No tickets', '-', '-', '-', '-', '-']])
       }];
 
-      // Clone template and modify for ticket report
-      const modifiedTemplate = JSON.parse(JSON.stringify(ticketReportTemplate));
+      // Clone the template (headers are already set in template.json)
+      const template = JSON.parse(JSON.stringify(ticketReportTemplate));
       
-      // Update table headers for tickets
-      const ordersSchema = modifiedTemplate.schemas[0].find((s: any) => s.name === 'orders');
-      if (ordersSchema) {
-        ordersSchema.head = ['ID', 'Title', 'Company', 'Status'];
-        ordersSchema.headWidthPercentages = [15, 45, 25, 15];
+      // Update filter_range table headers
+      const filterRangeSchema = template.schemas[0].find((s: any) => s.name === 'filter_range');
+      if (filterRangeSchema) {
+        filterRangeSchema.head = ['Filter', 'Value'];
+        filterRangeSchema.headWidthPercentages = [40, 60];
       }
 
-      // Update labels
-      const preparedForLabel = modifiedTemplate.schemas[0].find((s: any) => s.name === 'preparedForLabel');
-      if (preparedForLabel) {
-        preparedForLabel.content = 'Report Filters:';
-      }
-
-      const termsLabel = modifiedTemplate.schemas[0].find((s: any) => s.name === 'termsLabel');
-      if (termsLabel) {
-        termsLabel.content = 'Report Info';
-      }
-
-      const subtotalLabel = modifiedTemplate.schemas[0].find((s: any) => s.name === 'subtotalLabel');
-      if (subtotalLabel) {
-        subtotalLabel.content = 'Tickets';
-      }
-
-      const totalLabel = modifiedTemplate.schemas[0].find((s: any) => s.name === 'totalLabel');
-      if (totalLabel) {
-        totalLabel.content = 'Total';
-      }
-
-      const template = {
-        ...modifiedTemplate,
-        schemas: modifiedTemplate.schemas as any,
-        basePdf: modifiedTemplate.basePdf as any,
-      };
-
-      const plugins = { text, line, table, svg, multiVariableText };
+      const plugins = { text, line, table, svg, multiVariableText, image };
 
       const pdf = await generate({
         template,
@@ -631,6 +716,16 @@ const FullTicketList = () => {
       setEditSeverity(selectedTicket.severity);
     }
   }, [selectedTicket]);
+
+  // Keep selectedTicket in sync with tickets array when it updates
+  useEffect(() => {
+    if (selectedTicket) {
+      const updatedTicket = tickets.find(t => t.id === selectedTicket.id);
+      if (updatedTicket && JSON.stringify(updatedTicket) !== JSON.stringify(selectedTicket)) {
+        setSelectedTicket(updatedTicket);
+      }
+    }
+  }, [tickets]);
 
   // Handle save event date
   const handleSaveEventDate = async () => {
@@ -709,6 +804,22 @@ const FullTicketList = () => {
     }
   };
 
+  // Handle save note status
+  const handleSaveNoteStatus = async () => {
+    if (!selectedTicket || !editNoteStatus) return;
+
+    try {
+      const ticketRef = doc(db, 'tickets', selectedTicket.id);
+      await updateDoc(ticketRef, {
+        noteStatus: editNoteStatus,
+      });
+
+      setShowNoteStatusPopup(false);
+    } catch (error) {
+      console.error('Error updating ticket note status:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
@@ -745,6 +856,19 @@ const FullTicketList = () => {
                 All Tickets ({filteredTickets.length})
               </h3>
               <div className="flex items-center gap-2">
+                {/* Create Ticket Button */}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowCreateModal(true)}
+                  className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
+                  title="Create New Ticket"
+                >
+                  <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                </motion.button>
+
                 {/* PDF Report Button */}
                 <motion.button
                   whileHover={{ scale: 1.05 }}
@@ -1048,6 +1172,17 @@ const FullTicketList = () => {
                       `}>
                         {selectedTicket.severity}
                       </span>
+                      {selectedTicket.noteStatus && (
+                        <span className={`
+                          px-3 py-1 text-sm font-medium rounded-full
+                          ${selectedTicket.noteStatus === 'Quotation Sent' ? 'bg-purple-100 text-purple-800' :
+                            selectedTicket.noteStatus === 'Material Not Complete' ? 'bg-red-100 text-red-800' :
+                            selectedTicket.noteStatus === 'Under review' ? 'bg-cyan-100 text-cyan-800' :
+                            'bg-gray-100 text-gray-800'}
+                        `}>
+                          {selectedTicket.noteStatus}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </motion.div>
@@ -1356,6 +1491,87 @@ const FullTicketList = () => {
                         )}
                       </AnimatePresence>
                     </div>
+
+                    {/* Edit Note Status Section */}
+                    <div className="relative flex-1">
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => {
+                          if (!showNoteStatusPopup && selectedTicket) {
+                            setEditNoteStatus(selectedTicket.noteStatus || '');
+                          }
+                          setShowNoteStatusPopup(!showNoteStatusPopup);
+                        }}
+                        className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-meta-5 px-6 py-3 text-white font-medium hover:bg-opacity-90 transition-all"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Edit Note Status
+                      </motion.button>
+
+                      {/* Note Status Popup */}
+                      <AnimatePresence>
+                        {showNoteStatusPopup && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-full sm:w-96 z-50 bg-white dark:bg-boxdark rounded-xl shadow-2xl border border-gray-200 dark:border-strokedark p-6"
+                          >
+                            {/* Close button */}
+                            <button
+                              onClick={() => setShowNoteStatusPopup(false)}
+                              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                              Edit Note Status
+                            </h3>
+
+                            {/* Note Status Selection */}
+                            <div className="mb-6">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Note Status
+                              </label>
+                              <select
+                                value={editNoteStatus}
+                                onChange={(e) => setEditNoteStatus(e.target.value)}
+                                className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
+                              >
+                                <option value="">Select Note Status</option>
+                                <option value="Quotation Sent">Quotation Sent</option>
+                                <option value="Material Not Complete">Material Not Complete</option>
+                                <option value="Under review">Under review</option>
+                              </select>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex flex-col sm:flex-row gap-3">
+                              <button
+                                onClick={() => setShowNoteStatusPopup(false)}
+                                className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-meta-4 transition-all"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={handleSaveNoteStatus}
+                                disabled={!editNoteStatus}
+                                className="flex-1 rounded-lg bg-meta-5 py-2.5 px-4 font-medium text-white hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                              >
+                                Save Changes
+                              </button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
                 </motion.div>
               </motion.div>
@@ -1529,6 +1745,266 @@ const FullTicketList = () => {
                   )}
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Create Ticket Modal */}
+        {showCreateModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-999999 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setShowCreateModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white dark:bg-boxdark rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="sticky top-0 bg-white dark:bg-boxdark border-b border-gray-200 dark:border-strokedark px-6 py-4 flex items-center justify-between">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Create New Ticket</h3>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-meta-4 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <form onSubmit={handleCreateTicket} className="p-6 space-y-4">
+                {/* Subject */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Subject <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newTicketData.subject}
+                    onChange={(e) => setNewTicketData(prev => ({ ...prev, subject: e.target.value }))}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-meta-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+                    placeholder="Enter ticket subject"
+                    required
+                  />
+                </div>
+
+                {/* Sender */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Sender Email <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={newTicketData.sender}
+                    onChange={(e) => setNewTicketData(prev => ({ ...prev, sender: e.target.value }))}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-meta-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+                    placeholder="Enter sender email"
+                    required
+                  />
+                </div>
+
+                {/* Company and City */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Company <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newTicketData.company}
+                      onChange={(e) => setNewTicketData(prev => ({ ...prev, company: e.target.value }))}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-meta-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+                      placeholder="Company name"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      City <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newTicketData.city}
+                      onChange={(e) => setNewTicketData(prev => ({ ...prev, city: e.target.value }))}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-meta-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+                      placeholder="City"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Date and Time (Read-only) */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Date
+                    </label>
+                    <input
+                      type="text"
+                      value={new Date().toLocaleDateString()}
+                      readOnly
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-strokedark bg-gray-100 dark:bg-meta-4 text-gray-600 dark:text-gray-400 cursor-not-allowed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Time
+                    </label>
+                    <input
+                      type="text"
+                      value={new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                      readOnly
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-strokedark bg-gray-100 dark:bg-meta-4 text-gray-600 dark:text-gray-400 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                {/* Severity */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Severity <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={newTicketData.severity}
+                    onChange={(e) => setNewTicketData(prev => ({ ...prev, severity: e.target.value }))}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-meta-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+                    required
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                  </select>
+                </div>
+
+                {/* Contract Code and Contract Number */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Contract Code
+                    </label>
+                    <input
+                      type="text"
+                      value={newTicketData.contractCode}
+                      onChange={(e) => setNewTicketData(prev => ({ ...prev, contractCode: e.target.value }))}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-meta-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+                      placeholder="Contract code"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Contract Number
+                    </label>
+                    <input
+                      type="text"
+                      value={newTicketData.contractNumber}
+                      onChange={(e) => setNewTicketData(prev => ({ ...prev, contractNumber: e.target.value }))}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-meta-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+                      placeholder="Contract number"
+                    />
+                  </div>
+                </div>
+
+                {/* Branch Location */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Branch Location
+                  </label>
+                  <input
+                    type="text"
+                    value={newTicketData.branchLocation}
+                    onChange={(e) => setNewTicketData(prev => ({ ...prev, branchLocation: e.target.value }))}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-meta-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+                    placeholder="Branch location"
+                  />
+                </div>
+
+                {/* Issue Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Issue Description <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={newTicketData.issueDescription}
+                    onChange={(e) => setNewTicketData(prev => ({ ...prev, issueDescription: e.target.value }))}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-meta-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all resize-none"
+                    rows={4}
+                    placeholder="Describe the issue in detail"
+                    required
+                  />
+                </div>
+
+                {/* Attachment */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Attachment
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      onChange={(e) => setNewTicketData(prev => ({ ...prev, attachment: e.target.files?.[0] || null }))}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-meta-4 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-primary file:text-white file:cursor-pointer"
+                    />
+                    {newTicketData.attachment && (
+                      <div className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                        {newTicketData.attachment.name}
+                        <button
+                          type="button"
+                          onClick={() => setNewTicketData(prev => ({ ...prev, attachment: null }))}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-strokedark">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-meta-4 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creatingTicket}
+                    className="flex-1 rounded-lg bg-primary py-2.5 px-4 font-medium text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                  >
+                    {creatingTicket ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Create Ticket
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </motion.div>
         )}

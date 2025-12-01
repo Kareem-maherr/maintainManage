@@ -1,5 +1,5 @@
 {
-  "name": "tailadmin-react-free",
+  "name": "Arab-emergency-ticket",
   "private": true,
   "version": "1.3.8",
   "type": "module",
@@ -9,9 +9,8 @@
     "preview": "vite preview"
   },
   "author": {
-    "name": "TailAdmin",
-    "email": "hello@tailadmin.com",
-    "url": "https://tailadmin.com"
+    "name": "Kareem Maher",
+    "email": "karim.abdeldayem2000@gmail.com"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^6.7.2",
