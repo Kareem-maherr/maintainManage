@@ -77,6 +77,9 @@ const CalendarTickets = () => {
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [showReportViewer, setShowReportViewer] = useState(false);
+  const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
+  const [hasReadReport, setHasReadReport] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({
     status: '',
     engineer: '',
@@ -204,7 +207,16 @@ const CalendarTickets = () => {
   };
 
   const getDuration = (event: CalendarEvent) => Math.ceil((event.endDate.getTime() - event.startDate.getTime()) / (1000 * 60 * 60 * 24));
-  const handleSelectEvent = (event: CalendarEvent) => setSelectedEvent(selectedEvent?.id === event.id ? null : event);
+  const handleSelectEvent = (event: CalendarEvent) => {
+    if (selectedEvent?.id === event.id) {
+      setSelectedEvent(null);
+    } else {
+      setSelectedEvent(event);
+      setShowReportViewer(false); // Reset PDF viewer when selecting a different event
+      setExpandedTicketId(null); // Reset expanded ticket
+      setHasReadReport(false); // Reset report confirmation checkbox
+    }
+  };
   const hasActiveFilters = filters.status || filters.engineer || filters.location || filters.eventType;
   const clearFilters = () => setFilters({ status: '', engineer: '', location: '', eventType: '', sort: 'newest' });
 
@@ -465,20 +477,148 @@ const CalendarTickets = () => {
                           <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                           Tickets ({selectedEvent.tickets.length})
                         </h3>
-                        <div className="space-y-2 max-h-60 overflow-y-auto">
-                          {selectedEvent.tickets.map((ticket, idx) => (
-                            <div key={ticket.id || idx} className="bg-white dark:bg-boxdark rounded-lg p-3 border border-gray-200 dark:border-strokedark">
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium text-gray-900 dark:text-white truncate">{ticket.title}</span>
-                                <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${statusColors[ticket.status] || 'bg-gray-100 text-gray-600'}`}>{ticket.status}</span>
-                              </div>
-                              <div className="flex gap-2 mt-1 text-xs text-gray-500">
-                                <span>{ticket.company}</span>
-                                <span>•</span>
-                                <span>{ticket.location}</span>
-                              </div>
-                            </div>
-                          ))}
+                        <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                          {selectedEvent.tickets.map((ticket, idx) => {
+                            const isExpanded = expandedTicketId === (ticket.id || `ticket-${idx}`);
+                            const ticketKey = ticket.id || `ticket-${idx}`;
+                            return (
+                              <motion.div
+                                key={ticketKey}
+                                layout
+                                className="bg-white dark:bg-boxdark rounded-lg border border-gray-200 dark:border-strokedark overflow-hidden"
+                              >
+                                {/* Ticket Header - Clickable */}
+                                <div
+                                  onClick={() => setExpandedTicketId(isExpanded ? null : ticketKey)}
+                                  className={`p-3 cursor-pointer transition-colors ${isExpanded ? 'bg-green-100 dark:bg-green-900/20' : 'hover:bg-gray-50 dark:hover:bg-meta-4'}`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                      <motion.svg
+                                        animate={{ rotate: isExpanded ? 90 : 0 }}
+                                        className="w-4 h-4 text-gray-500 flex-shrink-0"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                                      </motion.svg>
+                                      <span className="font-medium text-gray-900 dark:text-white truncate">{ticket.title}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                      {ticket.reportUrl && (
+                                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-700 flex items-center gap-1">
+                                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                          </svg>
+                                          Report
+                                        </span>
+                                      )}
+                                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${statusColors[ticket.status] || 'bg-gray-100 text-gray-600'}`}>{ticket.status}</span>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2 mt-1 text-xs text-gray-500 ml-6">
+                                    <span>{ticket.company}</span>
+                                    <span>•</span>
+                                    <span>{ticket.location}</span>
+                                    {ticket.noteStatus && (
+                                      <>
+                                        <span>•</span>
+                                        <span className="text-blue-600">{ticket.noteStatus}</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Expanded Content */}
+                                <AnimatePresence>
+                                  {isExpanded && (
+                                    <motion.div
+                                      initial={{ opacity: 0, height: 0 }}
+                                      animate={{ opacity: 1, height: 'auto' }}
+                                      exit={{ opacity: 0, height: 0 }}
+                                      transition={{ duration: 0.3 }}
+                                      className="border-t border-gray-200 dark:border-strokedark"
+                                    >
+                                      <div className="p-4">
+                                        {/* Ticket Details */}
+                                        <div className="grid grid-cols-2 gap-3 mb-4">
+                                          <div>
+                                            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Company</label>
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white">{ticket.company}</p>
+                                          </div>
+                                          <div>
+                                            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Location</label>
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white">{ticket.location}</p>
+                                          </div>
+                                          <div>
+                                            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Severity</label>
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white">{ticket.severity}</p>
+                                          </div>
+                                          <div>
+                                            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Status</label>
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white">{ticket.status}</p>
+                                          </div>
+                                        </div>
+
+                                        {/* Report Section */}
+                                        {ticket.reportUrl ? (
+                                          <div className="mt-4">
+                                            <div className="flex items-center justify-between mb-3">
+                                              <h4 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                                <svg className="w-4 h-4 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                                Ticket Report
+                                              </h4>
+                                              <div className="flex gap-2">
+                                                <a
+                                                  href={ticket.reportUrl}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-orange-100 text-orange-800 rounded hover:bg-orange-200 transition-colors"
+                                                >
+                                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                  </svg>
+                                                  New Tab
+                                                </a>
+                                                <a
+                                                  href={ticket.reportUrl}
+                                                  download
+                                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded hover:bg-gray-200 transition-colors dark:bg-meta-4 dark:text-gray-300"
+                                                >
+                                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                  </svg>
+                                                  Download
+                                                </a>
+                                              </div>
+                                            </div>
+                                            {/* Embedded PDF Viewer */}
+                                            <div className="bg-gray-100 dark:bg-meta-4 rounded-lg overflow-hidden">
+                                              <iframe
+                                                src={`${ticket.reportUrl}#toolbar=1&navpanes=0&scrollbar=1`}
+                                                className="w-full h-[400px]"
+                                                title={`Report for ${ticket.title}`}
+                                              />
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="mt-4 p-4 bg-gray-100 dark:bg-meta-4 rounded-lg text-center">
+                                            <svg className="w-10 h-10 mx-auto text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">No report available for this ticket</p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </motion.div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -490,19 +630,123 @@ const CalendarTickets = () => {
                           <svg className="w-5 h-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                           Report
                         </h3>
-                        <a href={selectedEvent.reportUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-orange-100 text-orange-800 rounded-lg hover:bg-orange-200 transition-colors">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                          View Report
-                        </a>
+                        <div className="flex gap-2 mb-4">
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => setShowReportViewer(!showReportViewer)}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            {showReportViewer ? 'Hide Report' : 'View Report'}
+                          </motion.button>
+                          <a
+                            href={selectedEvent.reportUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-orange-100 text-orange-800 rounded-lg hover:bg-orange-200 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                            Open in New Tab
+                          </a>
+                          <a
+                            href={selectedEvent.reportUrl}
+                            download
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors dark:bg-meta-4 dark:text-gray-300 dark:hover:bg-gray-600"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Download
+                          </a>
+                        </div>
+
+                        {/* Embedded PDF Viewer */}
+                        <AnimatePresence>
+                          {showReportViewer && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.3 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="bg-white dark:bg-boxdark rounded-lg border border-gray-200 dark:border-strokedark overflow-hidden">
+                                <div className="bg-gray-100 dark:bg-meta-4 px-4 py-2 flex items-center justify-between border-b border-gray-200 dark:border-strokedark">
+                                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                                    <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                                      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 2l5 5h-5V4zm-2.5 9.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm-2 4.5h4v1h-4v-1zm8-3h-3v-1h3v1zm0-2h-3v-1h3v1z" />
+                                    </svg>
+                                    PDF Report
+                                  </span>
+                                  <button
+                                    onClick={() => setShowReportViewer(false)}
+                                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                  >
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                                <iframe
+                                  src={`${selectedEvent.reportUrl}#toolbar=1&navpanes=0&scrollbar=1`}
+                                  className="w-full h-[500px]"
+                                  title="Report PDF Viewer"
+                                />
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     )}
 
                     {/* Action Buttons */}
                     {!selectedEvent.resolved && (
-                      <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleResolveEvent} className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-green-500 px-6 py-3 text-white font-medium hover:bg-green-600 transition-all">
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
-                        Mark as Resolved
-                      </motion.button>
+                      <div className="space-y-3">
+                        {/* Confirm Read Report Checkbox */}
+                        <motion.label
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={hasReadReport}
+                            onChange={(e) => setHasReadReport(e.target.checked)}
+                            className="mt-0.5 w-5 h-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                          />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                              I confirm that I have read and reviewed the report
+                            </p>
+                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                              Please review the uploaded report before marking as resolved
+                            </p>
+                          </div>
+                        </motion.label>
+
+                        <motion.button
+                          whileHover={hasReadReport ? { scale: 1.02 } : {}}
+                          whileTap={hasReadReport ? { scale: 0.98 } : {}}
+                          onClick={handleResolveEvent}
+                          disabled={!hasReadReport}
+                          className={`w-full inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3 font-medium transition-all ${
+                            hasReadReport
+                              ? 'bg-green-500 text-white hover:bg-green-600 cursor-pointer'
+                              : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                          }`}
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                          </svg>
+                          Mark as Resolved
+                        </motion.button>
+                      </div>
                     )}
                   </motion.div>
                 </motion.div>

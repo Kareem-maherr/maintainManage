@@ -10,7 +10,7 @@ import {
   doc,
   where,
 } from 'firebase/firestore';
-import { Cog6ToothIcon, UserGroupIcon, CalendarDaysIcon, MapPinIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline';
+import { Cog6ToothIcon, UserGroupIcon, CalendarDaysIcon, MapPinIcon, BuildingOfficeIcon, XMarkIcon, PlusIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline';
 
 interface TeamMember {
   name: string;
@@ -62,8 +62,8 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
   const [scheduledEvents, setScheduledEvents] = useState<ScheduledEvent[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingTeam, setEditingTeam] = useState<Team | null>(null);
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+  const [editTeamName, setEditTeamName] = useState('');
   const [engineers, setEngineers] = useState<{id: string; email: string; displayName: string}[]>([]);
   const [memberCount, setMemberCount] = useState('');
   const [memberNames, setMemberNames] = useState<string[]>([]);
@@ -196,33 +196,89 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
     }
   };
 
-  const handleEditTeam = (team: Team) => {
-    setEditingTeam(team);
-    setSupervisor(team.supervisor || '');
-    setMemberNames(team.members.map((member) => member.name));
-    setIsEditModalOpen(true);
+  const handleOpenEditPanel = (team: Team, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (editingTeamId === team.id) {
+      // Close if clicking the same team
+      setEditingTeamId(null);
+    } else {
+      setEditingTeamId(team.id);
+      setEditTeamName(team.name);
+      setSupervisor(team.supervisor || '');
+      setMemberNames(team.members.map((member) => member.name));
+    }
   };
 
-  const handleUpdateTeam = async () => {
-    if (!editingTeam) return;
+  const handleCloseEditPanel = () => {
+    setEditingTeamId(null);
+    setEditTeamName('');
+    setSupervisor('');
+    setMemberNames([]);
+  };
 
+  const handleUpdateTeamName = async (teamId: string) => {
+    if (!editTeamName.trim()) return;
     try {
-      const updatedTeam = {
-        name: `${supervisor.trim()}'s Team`,
-        members: memberNames.map((name) => ({
-          name: name.trim(),
-          email: '',
-          role: 'member',
-        })),
-        supervisor: supervisor.trim(),
-      };
-
-      const teamDocRef = doc(db, 'teams', editingTeam.id);
-      await updateDoc(teamDocRef, updatedTeam);
-      setIsEditModalOpen(false);
-      setEditingTeam(null);
+      const teamDocRef = doc(db, 'teams', teamId);
+      await updateDoc(teamDocRef, { name: editTeamName.trim() });
     } catch (error) {
-      console.error('Error updating team:', error);
+      console.error('Error updating team name:', error);
+    }
+  };
+
+  const handleUpdateSupervisor = async (teamId: string) => {
+    if (!supervisor.trim()) return;
+    try {
+      const teamDocRef = doc(db, 'teams', teamId);
+      await updateDoc(teamDocRef, { supervisor: supervisor.trim() });
+    } catch (error) {
+      console.error('Error updating supervisor:', error);
+    }
+  };
+
+  const handleAddMember = async (teamId: string) => {
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return;
+    
+    const newMembers = [...team.members, { name: '', email: '', role: 'member' }];
+    setMemberNames(newMembers.map(m => m.name));
+    
+    try {
+      const teamDocRef = doc(db, 'teams', teamId);
+      await updateDoc(teamDocRef, { members: newMembers });
+    } catch (error) {
+      console.error('Error adding member:', error);
+    }
+  };
+
+  const handleUpdateMember = async (teamId: string, memberIndex: number, newName: string) => {
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return;
+    
+    const updatedMembers = team.members.map((member, idx) => 
+      idx === memberIndex ? { ...member, name: newName } : member
+    );
+    
+    try {
+      const teamDocRef = doc(db, 'teams', teamId);
+      await updateDoc(teamDocRef, { members: updatedMembers });
+    } catch (error) {
+      console.error('Error updating member:', error);
+    }
+  };
+
+  const handleRemoveMember = async (teamId: string, memberIndex: number) => {
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return;
+    
+    const updatedMembers = team.members.filter((_, idx) => idx !== memberIndex);
+    setMemberNames(updatedMembers.map(m => m.name));
+    
+    try {
+      const teamDocRef = doc(db, 'teams', teamId);
+      await updateDoc(teamDocRef, { members: updatedMembers });
+    } catch (error) {
+      console.error('Error removing member:', error);
     }
   };
 
@@ -269,13 +325,13 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
       </motion.div>
 
       {/* Split Panel Layout */}
-      <div className="flex gap-6 h-[calc(100vh-200px)]">
+      <div className="flex gap-6 h-[calc(100vh-200px)] relative">
         {/* Left Panel - Team List */}
         <motion.div
           initial={{ opacity: 0, x: -50 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5 }}
-          className="w-1/3 bg-white dark:bg-boxdark rounded-xl shadow-sm overflow-hidden flex flex-col"
+          className="w-1/3 min-w-[300px] bg-white dark:bg-boxdark rounded-xl shadow-sm flex flex-col relative z-10"
         >
           <div className="p-4 border-b border-gray-200 dark:border-strokedark">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -302,45 +358,55 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.02 }}
-                    onClick={() => handleSelectTeam(team)}
-                    className={`
-                      border-b border-gray-200 dark:border-strokedark p-4 cursor-pointer transition-all
-                      ${selectedTeam?.id === team.id 
-                        ? 'bg-primary/10 border-l-4 border-l-primary' 
-                        : 'hover:bg-gray-50 dark:hover:bg-meta-4'}
-                    `}
+                    className="relative"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-medium text-gray-900 dark:text-white truncate">
-                            {team.name}
-                          </h4>
-                          <Cog6ToothIcon
-                            className="h-4 w-4 text-gray-400 hover:text-primary cursor-pointer flex-shrink-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditTeam(team);
-                            }}
-                          />
-                        </div>
-                        {team.supervisor && (
-                          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                            Supervisor: {team.supervisor}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-2 mt-2">
-                          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                            {team.members?.length || 0} members
-                          </span>
-                          {team.team_engineer && (
-                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                              Assigned
-                            </span>
+                    <div
+                      onClick={() => handleSelectTeam(team)}
+                      className={`
+                        border-b border-gray-200 dark:border-strokedark p-4 cursor-pointer transition-all
+                        ${selectedTeam?.id === team.id 
+                          ? 'bg-primary/10 border-l-4 border-l-primary' 
+                          : 'hover:bg-gray-50 dark:hover:bg-meta-4'}
+                      `}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-medium text-gray-900 dark:text-white truncate">
+                              {team.name}
+                            </h4>
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={(e) => handleOpenEditPanel(team, e)}
+                              className={`p-1 rounded-md transition-colors ${
+                                editingTeamId === team.id 
+                                  ? 'bg-primary text-white' 
+                                  : 'text-gray-400 hover:text-primary hover:bg-gray-100 dark:hover:bg-meta-4'
+                              }`}
+                            >
+                              <Cog6ToothIcon className="h-4 w-4" />
+                            </motion.button>
+                          </div>
+                          {team.supervisor && (
+                            <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                              Supervisor: {team.supervisor}
+                            </p>
                           )}
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                              {team.members?.length || 0} members
+                            </span>
+                            {team.team_engineer && (
+                              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                Assigned
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
+
                   </motion.div>
                 ))
               )}
@@ -386,10 +452,14 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => handleEditTeam(selectedTeam)}
-                      className="p-2 rounded-lg bg-gray-100 dark:bg-meta-4 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                      onClick={(e) => handleOpenEditPanel(selectedTeam, e)}
+                      className={`p-2 rounded-lg transition-colors ${
+                        editingTeamId === selectedTeam.id
+                          ? 'bg-primary text-white'
+                          : 'bg-gray-100 dark:bg-meta-4 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300'
+                      }`}
                     >
-                      <Cog6ToothIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                      <Cog6ToothIcon className="h-5 w-5" />
                     </motion.button>
                   </div>
                 </motion.div>
@@ -562,6 +632,166 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
         </motion.div>
       </div>
 
+      {/* Edit Team Sidebar Panel */}
+      <AnimatePresence>
+        {editingTeamId && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={handleCloseEditPanel}
+              className="fixed inset-0 bg-black/20 z-40"
+            />
+            {/* Sidebar */}
+            <motion.div
+              initial={{ opacity: 0, x: 320 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 320 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed right-0 top-0 h-full w-80 bg-white dark:bg-boxdark shadow-2xl z-50 overflow-y-auto"
+            >
+              <div className="p-5">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-strokedark">
+                  <h4 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <PencilIcon className="w-5 h-5 text-primary" />
+                    Edit Team
+                  </h4>
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={handleCloseEditPanel}
+                    className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-meta-4"
+                  >
+                    <XMarkIcon className="w-5 h-5" />
+                  </motion.button>
+                </div>
+
+                {(() => {
+                  const team = teams.find(t => t.id === editingTeamId);
+                  if (!team) return null;
+                  
+                  return (
+                    <div className="space-y-6">
+                      {/* Team Name */}
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                          Team Name
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={editTeamName}
+                            onChange={(e) => setEditTeamName(e.target.value)}
+                            className="flex-1 px-3 py-2.5 text-sm rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input text-gray-900 dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                            placeholder="Team name"
+                          />
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => handleUpdateTeamName(team.id)}
+                            className="px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-opacity-90"
+                          >
+                            Save
+                          </motion.button>
+                        </div>
+                      </div>
+
+                      {/* Supervisor */}
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                          Supervisor
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={supervisor}
+                            onChange={(e) => setSupervisor(e.target.value)}
+                            className="flex-1 px-3 py-2.5 text-sm rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input text-gray-900 dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                            placeholder="Supervisor name"
+                          />
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => handleUpdateSupervisor(team.id)}
+                            className="px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-opacity-90"
+                          >
+                            Save
+                          </motion.button>
+                        </div>
+                      </div>
+
+                      {/* Members */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                            Members ({team.members?.length || 0})
+                          </label>
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => handleAddMember(team.id)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-lg hover:bg-opacity-90 transition-colors"
+                          >
+                            <PlusIcon className="w-4 h-4" />
+                            Add Member
+                          </motion.button>
+                        </div>
+                        <div className="space-y-2">
+                          {team.members?.map((member, memberIndex) => (
+                            <div key={memberIndex} className="flex items-center gap-2 group">
+                              <input
+                                type="text"
+                                defaultValue={member.name}
+                                onBlur={(e) => handleUpdateMember(team.id, memberIndex, e.target.value)}
+                                className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-strokedark bg-gray-50 dark:bg-meta-4 text-gray-900 dark:text-white focus:border-primary focus:ring-2 focus:ring-primary/20 focus:bg-white dark:focus:bg-form-input outline-none transition-colors"
+                                placeholder={`Member ${memberIndex + 1}`}
+                              />
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => handleRemoveMember(team.id, memberIndex)}
+                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </motion.button>
+                            </div>
+                          ))}
+                          {(!team.members || team.members.length === 0) && (
+                            <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-4 bg-gray-50 dark:bg-meta-4 rounded-lg">
+                              No members yet. Click "Add Member" to add one.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Assigned Engineer Info */}
+                      {team.team_engineer && (
+                        <div className="pt-4 border-t border-gray-200 dark:border-strokedark">
+                          <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                            Assigned Engineer
+                          </label>
+                          <div className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                            <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
+                              <UserGroupIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                            </div>
+                            <p className="text-sm font-medium text-green-800 dark:text-green-300">
+                              {engineers.find(eng => eng.email === team.team_engineer)?.displayName || team.team_engineer}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Create Team Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
@@ -645,45 +875,6 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
         </div>
       )}
 
-      {/* Edit Team Modal */}
-      {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="w-full max-w-lg p-6 bg-white rounded-md shadow-lg">
-            <h3 className="mb-4 text-lg font-medium text-black">Edit Team</h3>
-            <input
-              type="text"
-              value={supervisor}
-              onChange={(e) => setSupervisor(e.target.value)}
-              placeholder="Supervisor"
-              className="w-full mb-4 p-2 border border-gray-300 rounded"
-            />
-            <textarea
-              value={memberNames.join(', ')}
-              onChange={(e) =>
-                setMemberNames(
-                  e.target.value.split(',').map((name) => name.trim()),
-                )
-              }
-              placeholder="Member names (separated by commas)"
-              className="w-full mb-4 p-2 border border-gray-300 rounded"
-            />
-            <div className="flex justify-end">
-              <button
-                onClick={() => setIsEditModalOpen(false)}
-                className="mr-2 inline-flex items-center justify-center rounded-md bg-gray-300 py-2 px-4 text-center font-medium text-black hover:bg-opacity-90"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleUpdateTeam}
-                className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-4 text-center font-medium text-white hover:bg-opacity-90"
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

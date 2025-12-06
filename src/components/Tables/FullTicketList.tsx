@@ -46,6 +46,14 @@ interface FullTicket {
   ticketDetails?: string;
 }
 
+interface Message {
+  id: string;
+  text: string;
+  sender: string;
+  timestamp: Timestamp;
+  isAdmin: boolean;
+}
+
 interface FilterOptions {
   startDate: string;
   endDate: string;
@@ -110,6 +118,11 @@ const FullTicketList = () => {
   const [engineers, setEngineers] = useState<string[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creatingTicket, setCreatingTicket] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(new Set());
+  const [showGroupDatePopup, setShowGroupDatePopup] = useState(false);
   const [newTicketData, setNewTicketData] = useState({
     subject: '',
     sender: '',
@@ -727,7 +740,57 @@ const FullTicketList = () => {
     }
   }, [tickets]);
 
-  // Handle save event date
+  // Listen to messages for the selected ticket
+  useEffect(() => {
+    if (!selectedTicket) {
+      setMessages([]);
+      return;
+    }
+
+    const messagesRef = collection(db, 'tickets', selectedTicket.id, 'messages');
+    const q = query(messagesRef, orderBy('timestamp', 'asc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const messageData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Message[];
+      setMessages(messageData);
+    });
+
+    return () => unsubscribe();
+  }, [selectedTicket?.id]);
+
+  // Handle sending a message
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !selectedTicket || sendingMessage) return;
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      console.error('No user logged in to send message');
+      return;
+    }
+
+    try {
+      setSendingMessage(true);
+      const messagesRef = collection(db, 'tickets', selectedTicket.id, 'messages');
+      await addDoc(messagesRef, {
+        text: newMessage,
+        sender: currentUser.email || 'Unknown User',
+        isAdmin: !isEngineer,
+        timestamp: serverTimestamp(),
+      });
+
+      setNewMessage('');
+    } catch (error) {
+      console.error('Error sending message:', error);
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  // Handle save event date (single ticket)
   const handleSaveEventDate = async () => {
     if (!selectedDate || !selectedTeam || !selectedTicket) return;
 
@@ -784,6 +847,99 @@ const FullTicketList = () => {
       setSelectedDate(new Date());
     } catch (error) {
       console.error('Error creating event:', error);
+    }
+  };
+
+  // Handle save group event date (multiple tickets)
+  const handleSaveGroupEventDate = async () => {
+    if (!selectedDate || !selectedTeam || selectedTicketIds.size === 0) return;
+
+    const selectedTeamData = teams.find(team => team.id === selectedTeam);
+    if (!selectedTeamData) return;
+
+    const endDate = new Date(selectedDate);
+    endDate.setDate(endDate.getDate() + 1);
+
+    // Get selected tickets data
+    const selectedTicketsData = tickets.filter(t => selectedTicketIds.has(t.id));
+    const companies = [...new Set(selectedTicketsData.map(t => t.company))].join(', ');
+    const locations = [...new Set(selectedTicketsData.map(t => t.location))].join(', ');
+
+    try {
+      const eventData = {
+        title: `Group Event (${selectedTicketsData.length} tickets)`,
+        startDate: selectedDate,
+        endDate: endDate,
+        teamName: selectedTeamData.name || 'Unknown Team',
+        projectName: companies || 'Multiple Projects',
+        projectManager: selectedTeamData.projectManager || 'Unassigned',
+        leadEngineer: selectedTeamData.leadEngineer || 'Unassigned',
+        location: locations || 'Multiple Locations',
+        ticketIds: Array.from(selectedTicketIds),
+        ticketCount: selectedTicketsData.length,
+        event_type: 'group',
+        responsibleEngineer: userEmail || '',
+        supervisorEmail: selectedTeamData.supervisorEmail || '',
+        createdAt: new Date(),
+        tickets: selectedTicketsData.map(t => ({
+          id: t.id,
+          title: t.title,
+          company: t.company,
+          location: t.location,
+          severity: t.severity,
+          status: t.status,
+          noteStatus: t.noteStatus
+        }))
+      };
+
+      await addDoc(collection(db, 'events'), eventData);
+
+      // Update all selected tickets
+      for (const ticketId of selectedTicketIds) {
+        const ticketRef = doc(db, 'tickets', ticketId);
+        const ticket = tickets.find(t => t.id === ticketId);
+        const updateData: any = {
+          date: selectedDate,
+          isDateSet: true,
+          supervisor_email: selectedTeamData.supervisorEmail || ''
+        };
+        
+        if (ticket && !(ticket as any).transfer_engineer) {
+          updateData.responsible_engineer = userEmail || '';
+        }
+        
+        await updateDoc(ticketRef, updateData);
+      }
+
+      setShowGroupDatePopup(false);
+      setSelectedTeam('');
+      setSelectedDate(new Date());
+      setSelectedTicketIds(new Set());
+    } catch (error) {
+      console.error('Error creating group event:', error);
+    }
+  };
+
+  // Toggle ticket selection
+  const toggleTicketSelection = (ticketId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedTicketIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(ticketId)) {
+        newSet.delete(ticketId);
+      } else {
+        newSet.add(ticketId);
+      }
+      return newSet;
+    });
+  };
+
+  // Select all tickets
+  const handleSelectAll = () => {
+    if (selectedTicketIds.size === filteredTickets.length) {
+      setSelectedTicketIds(new Set());
+    } else {
+      setSelectedTicketIds(new Set(filteredTickets.map(t => t.id)));
     }
   };
 
@@ -852,10 +1008,52 @@ const FullTicketList = () => {
         >
           <div className="p-4 border-b border-gray-200 dark:border-strokedark">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                All Tickets ({filteredTickets.length})
-              </h3>
+              <div className="flex items-center gap-3">
+                {/* Select All Checkbox */}
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={handleSelectAll}
+                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                    selectedTicketIds.size === filteredTickets.length && filteredTickets.length > 0
+                      ? 'bg-primary border-primary'
+                      : selectedTicketIds.size > 0
+                        ? 'bg-primary/50 border-primary'
+                        : 'border-gray-300 dark:border-gray-600'
+                  }`}
+                  title={selectedTicketIds.size === filteredTickets.length ? 'Deselect All' : 'Select All'}
+                >
+                  {selectedTicketIds.size > 0 && (
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </motion.button>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  All Tickets ({filteredTickets.length})
+                </h3>
+              </div>
               <div className="flex items-center gap-2">
+                {/* Create Group Event Button - Shows when tickets selected */}
+                <AnimatePresence>
+                  {selectedTicketIds.size > 1 && (
+                    <motion.button
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setShowGroupDatePopup(true)}
+                      className="px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium flex items-center gap-1.5 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      Group ({selectedTicketIds.size})
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+
                 {/* Create Ticket Button */}
                 <motion.button
                   whileHover={{ scale: 1.05 }}
@@ -1074,12 +1272,31 @@ const FullTicketList = () => {
                     onClick={() => handleSelectTicket(ticket)}
                     className={`
                       border-b border-gray-200 dark:border-strokedark p-4 cursor-pointer transition-all
-                      ${selectedTicket?.id === ticket.id 
-                        ? 'bg-primary/10 border-l-4 border-l-primary' 
-                        : 'hover:bg-gray-50 dark:hover:bg-meta-4'}
+                      ${selectedTicketIds.has(ticket.id)
+                        ? 'bg-blue-50 dark:bg-blue-900/20'
+                        : selectedTicket?.id === ticket.id 
+                          ? 'bg-primary/10 border-l-4 border-l-primary' 
+                          : 'hover:bg-gray-50 dark:hover:bg-meta-4'}
                     `}
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-3">
+                      {/* Checkbox for multi-select */}
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={(e) => toggleTicketSelection(ticket.id, e)}
+                        className={`mt-0.5 w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+                          selectedTicketIds.has(ticket.id)
+                            ? 'bg-blue-500 border-blue-500'
+                            : 'border-gray-300 dark:border-gray-600 hover:border-blue-400'
+                        }`}
+                      >
+                        {selectedTicketIds.has(ticket.id) && (
+                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </motion.button>
                       <div className="flex-1 min-w-0">
                         <h4 className="font-medium text-gray-900 dark:text-white truncate mb-1 flex items-center gap-2">
                           {ticket.title}
@@ -1305,44 +1522,135 @@ const FullTicketList = () => {
                   </div>
 
                   {/* Action Buttons Section */}
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    {/* Set Event Date Section */}
-                    <div className="relative flex-1">
+                  <div className="space-y-4">
+                    {/* Action Buttons Row */}
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      {/* Set Event Date Button */}
                       <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
-                        onClick={() => setShowDatePopup(!showDatePopup)}
-                        className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-white font-medium hover:bg-opacity-90 transition-all"
+                        onClick={() => {
+                          setShowDatePopup(!showDatePopup);
+                          setShowStatusPopup(false);
+                          setShowNoteStatusPopup(false);
+                        }}
+                        className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 font-medium transition-all ${
+                          showDatePopup
+                            ? 'bg-primary text-white ring-2 ring-primary ring-offset-2 dark:ring-offset-boxdark'
+                            : 'bg-primary text-white hover:bg-opacity-90'
+                        }`}
                       >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        Set Event Date
+                        <span className="hidden sm:inline">Set Event Date</span>
+                        <span className="sm:hidden">Date</span>
+                        <motion.svg
+                          animate={{ rotate: showDatePopup ? 180 : 0 }}
+                          className="w-4 h-4 ml-1"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                        </motion.svg>
                       </motion.button>
 
-                      {/* Responsive Popup */}
-                      <AnimatePresence>
-                        {showDatePopup && (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                            transition={{ duration: 0.2 }}
-                            className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-full sm:w-96 md:w-[28rem] z-50 bg-white dark:bg-boxdark rounded-xl shadow-2xl border border-gray-200 dark:border-strokedark p-6 max-h-[80vh] overflow-y-auto"
-                          >
-                            {/* Close button */}
-                            <button
-                              onClick={() => setShowDatePopup(false)}
-                              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                            >
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
+                      {/* Edit Status & Severity Button */}
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => {
+                          setShowStatusPopup(!showStatusPopup);
+                          setShowDatePopup(false);
+                          setShowNoteStatusPopup(false);
+                        }}
+                        className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 font-medium transition-all ${
+                          showStatusPopup
+                            ? 'bg-meta-3 text-white ring-2 ring-meta-3 ring-offset-2 dark:ring-offset-boxdark'
+                            : 'bg-meta-3 text-white hover:bg-opacity-90'
+                        }`}
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        <span className="hidden sm:inline">Edit Status & Severity</span>
+                        <span className="sm:hidden">Status</span>
+                        <motion.svg
+                          animate={{ rotate: showStatusPopup ? 180 : 0 }}
+                          className="w-4 h-4 ml-1"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                        </motion.svg>
+                      </motion.button>
 
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                              Set Event Date
-                            </h3>
+                      {/* Edit Note Status Button */}
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => {
+                          if (!showNoteStatusPopup && selectedTicket) {
+                            setEditNoteStatus(selectedTicket.noteStatus || '');
+                          }
+                          setShowNoteStatusPopup(!showNoteStatusPopup);
+                          setShowDatePopup(false);
+                          setShowStatusPopup(false);
+                        }}
+                        className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 font-medium transition-all ${
+                          showNoteStatusPopup
+                            ? 'bg-meta-5 text-white ring-2 ring-meta-5 ring-offset-2 dark:ring-offset-boxdark'
+                            : 'bg-meta-5 text-white hover:bg-opacity-90'
+                        }`}
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span className="hidden sm:inline">Edit Note Status</span>
+                        <span className="sm:hidden">Note</span>
+                        <motion.svg
+                          animate={{ rotate: showNoteStatusPopup ? 180 : 0 }}
+                          className="w-4 h-4 ml-1"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                        </motion.svg>
+                      </motion.button>
+                    </div>
+
+                    {/* Expandable Sections */}
+                    <AnimatePresence mode="wait">
+                      {/* Set Event Date Section */}
+                      {showDatePopup && (
+                        <motion.div
+                          key="date-section"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="bg-blue-50 dark:bg-meta-4 rounded-xl p-5 border border-primary/20">
+                            <div className="flex items-center justify-between mb-4">
+                              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                Set Event Date
+                              </h3>
+                              <button
+                                onClick={() => setShowDatePopup(false)}
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+                              >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
 
                             {/* Team Selection */}
                             <div className="mb-4">
@@ -1374,7 +1682,7 @@ const FullTicketList = () => {
                                   }
                                 }}
                                 value={selectedDate}
-                                className="rounded-lg border-0 shadow-sm"
+                                className="rounded-lg border-0 shadow-sm w-full max-w-sm"
                                 minDate={new Date()}
                               />
                             </div>
@@ -1383,7 +1691,7 @@ const FullTicketList = () => {
                             <div className="flex flex-col sm:flex-row gap-3">
                               <button
                                 onClick={() => setShowDatePopup(false)}
-                                className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-meta-4 transition-all"
+                                className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-boxdark transition-all"
                               >
                                 Cancel
                               </button>
@@ -1395,87 +1703,78 @@ const FullTicketList = () => {
                                 Save Event
                               </button>
                             </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                          </div>
+                        </motion.div>
+                      )}
 
-                    {/* Edit Status & Severity Section */}
-                    <div className="relative flex-1">
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setShowStatusPopup(!showStatusPopup)}
-                        className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-meta-3 px-6 py-3 text-white font-medium hover:bg-opacity-90 transition-all"
-                      >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        Edit Status & Severity
-                      </motion.button>
-
-                      {/* Responsive Popup */}
-                      <AnimatePresence>
-                        {showStatusPopup && (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                            transition={{ duration: 0.2 }}
-                            className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-full sm:w-96 z-50 bg-white dark:bg-boxdark rounded-xl shadow-2xl border border-gray-200 dark:border-strokedark p-6"
-                          >
-                            {/* Close button */}
-                            <button
-                              onClick={() => setShowStatusPopup(false)}
-                              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                            >
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                              Edit Status & Severity
-                            </h3>
-
-                            {/* Status Selection */}
-                            <div className="mb-4">
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Status
-                              </label>
-                              <select
-                                value={editStatus}
-                                onChange={(e) => setEditStatus(e.target.value)}
-                                className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
+                      {/* Edit Status & Severity Section */}
+                      {showStatusPopup && (
+                        <motion.div
+                          key="status-section"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="bg-green-50 dark:bg-meta-4 rounded-xl p-5 border border-meta-3/20">
+                            <div className="flex items-center justify-between mb-4">
+                              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                <svg className="w-5 h-5 text-meta-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                Edit Status & Severity
+                              </h3>
+                              <button
+                                onClick={() => setShowStatusPopup(false)}
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
                               >
-                                <option value="Open">Open</option>
-                                <option value="In Progress">In Progress</option>
-                                <option value="Resolved">Resolved</option>
-                              </select>
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
                             </div>
 
-                            {/* Severity Selection */}
-                            <div className="mb-6">
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Severity
-                              </label>
-                              <select
-                                value={editSeverity}
-                                onChange={(e) => setEditSeverity(e.target.value)}
-                                className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
-                              >
-                                <option value="Low">Low</option>
-                                <option value="Medium">Medium</option>
-                                <option value="High">High</option>
-                                <option value="Critical">Critical</option>
-                              </select>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                              {/* Status Selection */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                  Status
+                                </label>
+                                <select
+                                  value={editStatus}
+                                  onChange={(e) => setEditStatus(e.target.value)}
+                                  className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
+                                >
+                                  <option value="Open">Open</option>
+                                  <option value="In Progress">In Progress</option>
+                                  <option value="Resolved">Resolved</option>
+                                </select>
+                              </div>
+
+                              {/* Severity Selection */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                  Severity
+                                </label>
+                                <select
+                                  value={editSeverity}
+                                  onChange={(e) => setEditSeverity(e.target.value)}
+                                  className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
+                                >
+                                  <option value="Low">Low</option>
+                                  <option value="Medium">Medium</option>
+                                  <option value="High">High</option>
+                                  <option value="Critical">Critical</option>
+                                </select>
+                              </div>
                             </div>
 
                             {/* Action Buttons */}
                             <div className="flex flex-col sm:flex-row gap-3">
                               <button
                                 onClick={() => setShowStatusPopup(false)}
-                                className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-meta-4 transition-all"
+                                className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-boxdark transition-all"
                               >
                                 Cancel
                               </button>
@@ -1487,56 +1786,40 @@ const FullTicketList = () => {
                                 Save Changes
                               </button>
                             </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                          </div>
+                        </motion.div>
+                      )}
 
-                    {/* Edit Note Status Section */}
-                    <div className="relative flex-1">
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => {
-                          if (!showNoteStatusPopup && selectedTicket) {
-                            setEditNoteStatus(selectedTicket.noteStatus || '');
-                          }
-                          setShowNoteStatusPopup(!showNoteStatusPopup);
-                        }}
-                        className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-meta-5 px-6 py-3 text-white font-medium hover:bg-opacity-90 transition-all"
-                      >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        Edit Note Status
-                      </motion.button>
-
-                      {/* Note Status Popup */}
-                      <AnimatePresence>
-                        {showNoteStatusPopup && (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                            transition={{ duration: 0.2 }}
-                            className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-full sm:w-96 z-50 bg-white dark:bg-boxdark rounded-xl shadow-2xl border border-gray-200 dark:border-strokedark p-6"
-                          >
-                            {/* Close button */}
-                            <button
-                              onClick={() => setShowNoteStatusPopup(false)}
-                              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                            >
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                              Edit Note Status
-                            </h3>
+                      {/* Edit Note Status Section */}
+                      {showNoteStatusPopup && (
+                        <motion.div
+                          key="note-section"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="bg-orange-50 dark:bg-meta-4 rounded-xl p-5 border border-meta-5/20">
+                            <div className="flex items-center justify-between mb-4">
+                              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                <svg className="w-5 h-5 text-meta-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Edit Note Status
+                              </h3>
+                              <button
+                                onClick={() => setShowNoteStatusPopup(false)}
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+                              >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
 
                             {/* Note Status Selection */}
-                            <div className="mb-6">
+                            <div className="mb-4">
                               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Note Status
                               </label>
@@ -1556,7 +1839,7 @@ const FullTicketList = () => {
                             <div className="flex flex-col sm:flex-row gap-3">
                               <button
                                 onClick={() => setShowNoteStatusPopup(false)}
-                                className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-meta-4 transition-all"
+                                className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-boxdark transition-all"
                               >
                                 Cancel
                               </button>
@@ -1568,11 +1851,93 @@ const FullTicketList = () => {
                                 Save Changes
                               </button>
                             </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
+
+                  {/* Conversation/Chat Section */}
+                  <motion.div
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="bg-gray-50 dark:bg-meta-4 rounded-lg p-5 mt-8"
+                  >
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                      Conversation
+                    </h3>
+
+                    {/* Messages Container */}
+                    <div className="bg-white dark:bg-boxdark rounded-lg p-4 max-h-[300px] overflow-y-auto mb-4 space-y-3">
+                      {messages.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                          <svg className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          </svg>
+                          <p className="text-sm">No messages yet. Start the conversation!</p>
+                        </div>
+                      ) : (
+                        messages.map((message) => {
+                          const isCurrentUserSender = message.sender === userEmail;
+                          return (
+                            <motion.div
+                              key={message.id}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className={`flex ${isCurrentUserSender ? 'justify-end' : 'justify-start'}`}
+                            >
+                              <div
+                                className={`max-w-[80%] rounded-lg p-3 ${
+                                  isCurrentUserSender
+                                    ? 'bg-primary text-white'
+                                    : 'bg-gray-100 dark:bg-meta-4 text-gray-900 dark:text-white'
+                                }`}
+                              >
+                                <div className={`text-xs font-medium mb-1 ${isCurrentUserSender ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'}`}>
+                                  {message.sender} • {message.timestamp?.toDate?.()?.toLocaleString() || 'Just now'}
+                                </div>
+                                <div className="text-sm">{message.text}</div>
+                              </div>
+                            </motion.div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* Message Input */}
+                    <form onSubmit={handleSendMessage} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        placeholder="Type your message..."
+                        className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input text-gray-900 dark:text-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                      />
+                      <motion.button
+                        type="submit"
+                        disabled={sendingMessage || !newMessage.trim()}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="px-4 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                      >
+                        {sendingMessage ? (
+                          <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        ) : (
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                          </svg>
+                        )}
+                        <span className="hidden sm:inline">Send</span>
+                      </motion.button>
+                    </form>
+                  </motion.div>
                 </motion.div>
               </motion.div>
             ) : (
@@ -2005,6 +2370,117 @@ const FullTicketList = () => {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Group Event Modal */}
+        {showGroupDatePopup && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+            onClick={() => setShowGroupDatePopup(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white dark:bg-boxdark rounded-xl shadow-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <svg className="w-6 h-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  Create Group Event
+                </h3>
+                <button
+                  onClick={() => setShowGroupDatePopup(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Selected Tickets Summary */}
+              <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">
+                  {selectedTicketIds.size} tickets selected
+                </p>
+                <div className="max-h-32 overflow-y-auto space-y-1">
+                  {tickets.filter(t => selectedTicketIds.has(t.id)).map(ticket => (
+                    <div key={ticket.id} className="text-xs text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                      <span className="truncate">{ticket.title}</span>
+                      <span className="text-blue-500">({ticket.company})</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Team Selection */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Select Team
+                </label>
+                <select
+                  value={selectedTeam}
+                  onChange={(e) => setSelectedTeam(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
+                >
+                  <option value="">Select a team</option>
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Calendar */}
+              <div className="mb-6 flex justify-center">
+                <Calendar
+                  onChange={(value) => {
+                    if (value instanceof Date) {
+                      setSelectedDate(value);
+                    } else if (Array.isArray(value) && value[0] instanceof Date) {
+                      setSelectedDate(value[0]);
+                    }
+                  }}
+                  value={selectedDate}
+                  className="rounded-lg border-0 shadow-sm"
+                  minDate={new Date()}
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowGroupDatePopup(false);
+                    setSelectedTicketIds(new Set());
+                  }}
+                  className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-meta-4 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveGroupEventDate}
+                  disabled={!selectedTeam || !selectedDate}
+                  className="flex-1 rounded-lg bg-blue-500 py-2.5 px-4 font-medium text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Create Group Event
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
