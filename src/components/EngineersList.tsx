@@ -21,7 +21,7 @@ const EngineersList = () => {
   const [loading, setLoading] = useState(true);
   const [expandedEngineerId, setExpandedEngineerId] = useState<string | null>(null);
   const [printing, setPrinting] = useState<string | null>(null);
-  const { t } = useLanguage();
+  const { t, tEn } = useLanguage();
 
   const handlePrintEngineerDetails = async (engineer: Engineer, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -542,7 +542,8 @@ const EngineersList = () => {
 
   const getTranslatedName = (displayName: string) => {
     const translationKey = `engineers.engineerNames.${displayName}`;
-    return t(translationKey) || displayName;
+    const translated = tEn(translationKey);
+    return translated === translationKey ? displayName : translated;
   };
 
   const getTranslatedRole = (role: string) => {

@@ -62,8 +62,15 @@ const ClientList = () => {
     contactNumber: '',
     contactJobTitle: ''
   });
-  const { t } = useLanguage();
+  const { t, tEn } = useLanguage();
   const { currentUser } = useAuth();
+
+  const getCompanyNameEn = (companyName?: string) => {
+    if (!companyName) return t('clients.companyNameNotSet');
+    const translationKey = `clients.clientNames.${companyName}`;
+    const translated = tEn(translationKey);
+    return translated === translationKey ? companyName : translated;
+  };
 
   useEffect(() => {
     fetchUsers();
@@ -326,7 +333,7 @@ const ClientList = () => {
                           font-semibold truncate
                           ${selectedUser?.id === user.id ? 'text-primary' : 'text-gray-900'}
                         `}>
-                          {t(`clients.clientNames.${user.companyName}`) || user.companyName || t('clients.companyNameNotSet')}
+                          {getCompanyNameEn(user.companyName)}
                         </h4>
                         <p className="text-sm text-gray-500 truncate">{user.email}</p>
                       </div>
@@ -391,7 +398,7 @@ const ClientList = () => {
                       transition={{ delay: 0.3 }}
                       className="text-3xl font-bold text-gray-900 mb-2"
                     >
-                      {t(`clients.clientNames.${selectedUser.companyName}`) || selectedUser.companyName || t('clients.companyNameNotSet')}
+                      {getCompanyNameEn(selectedUser.companyName)}
                     </motion.h2>
                     <motion.p
                       initial={{ x: -20, opacity: 0 }}
