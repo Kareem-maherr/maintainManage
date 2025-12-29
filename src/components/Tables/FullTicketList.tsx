@@ -37,6 +37,8 @@ interface FullTicket {
   responsible_engineer?: string;
   hasUnreadMessages?: boolean;
   date?: any;
+  installationDate?: any;
+  attachmentUrl?: string;
   isViewed?: boolean;
   isDateSet?: boolean;
   readableId?: string;
@@ -72,6 +74,7 @@ interface Team {
   supervisor?: string;
   supervisorEmail?: string;
   team_engineer?: string;
+  team_engineers?: string[];
 }
 
 const FullTicketList = () => {
@@ -80,6 +83,7 @@ const FullTicketList = () => {
   const [selectedTicket, setSelectedTicket] = useState<FullTicket | null>(null);
   const [highlightedTicketId, setHighlightedTicketId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [filters, setFilters] = useState<FilterOptions>({
     startDate: '',
     endDate: '',
@@ -105,6 +109,7 @@ const FullTicketList = () => {
   const [editSeverity, setEditSeverity] = useState<string>('');
   const [showNoteStatusPopup, setShowNoteStatusPopup] = useState(false);
   const [editNoteStatus, setEditNoteStatus] = useState<string>('');
+  const [editInstallationDate, setEditInstallationDate] = useState<Date | null>(null);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfParams, setPdfParams] = useState({
@@ -115,7 +120,14 @@ const FullTicketList = () => {
     severity: '',
   });
   const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  const isLikelyImageUrl = (url?: string) => {
+    if (!url) return false;
+    return /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(url);
+  };
   const [engineers, setEngineers] = useState<string[]>([]);
+  const [allEngineers, setAllEngineers] = useState<{ email: string; name: string }[]>([]);
+  const [selectedEngineerForAssignment, setSelectedEngineerForAssignment] = useState<string>('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creatingTicket, setCreatingTicket] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -410,6 +422,7 @@ const FullTicketList = () => {
               responsible_engineer: ticketData.responsible_engineer,
               hasUnreadMessages,
               date: ticketData.date,
+              attachmentUrl: ticketData.attachmentUrl,
               isViewed: ticketData.isViewed || false,
               isDateSet: ticketData.isDateSet || false,
               readableId: ticketData.ticketId || 'Unknown',
@@ -590,13 +603,13 @@ const FullTicketList = () => {
       if (!userEmail) return;
       
       const teamsCollection = collection(db, 'teams');
-      const q = query(teamsCollection, where('team_engineer', '==', userEmail));
-      const teamsSnapshot = await getDocs(q);
-      const teamsData = teamsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Team[];
-      setTeams(teamsData);
+      const qArray = query(teamsCollection, where('team_engineers', 'array-contains', userEmail));
+      const qLegacy = query(teamsCollection, where('team_engineer', '==', userEmail));
+      const [arraySnap, legacySnap] = await Promise.all([getDocs(qArray), getDocs(qLegacy)]);
+      const byId = new Map<string, Team>();
+      arraySnap.docs.forEach((d) => byId.set(d.id, ({ id: d.id, ...d.data() } as Team)));
+      legacySnap.docs.forEach((d) => byId.set(d.id, ({ id: d.id, ...d.data() } as Team)));
+      setTeams(Array.from(byId.values()));
     };
 
     fetchTeams();
@@ -610,6 +623,28 @@ const FullTicketList = () => {
     };
     fetchEngineers();
   }, [tickets]);
+
+  // Fetch all available engineers for assignment
+  useEffect(() => {
+    const fetchAllEngineers = async () => {
+      try {
+        const engineersRef = collection(db, 'engineers');
+        const q = query(engineersRef, where('role', '==', 'engineer'));
+        const querySnapshot = await getDocs(q);
+        const engineersList = querySnapshot.docs.map(doc => ({
+          email: doc.data().email || '',
+          name: doc.data().displayName || doc.data().name || doc.data().email || 'Unnamed Engineer'
+        })).filter(eng => eng.email);
+        
+        console.log('Fetched all engineers for assignment:', engineersList);
+        setAllEngineers(engineersList);
+      } catch (error) {
+        console.error('Error fetching all engineers:', error);
+      }
+    };
+
+    fetchAllEngineers();
+  }, []);
 
   // Generate PDF report
   const handleGeneratePdf = async () => {
@@ -790,6 +825,23 @@ const FullTicketList = () => {
     }
   };
 
+  // Handle assigning an engineer to a ticket
+  const handleAssignEngineer = async (ticketId: string) => {
+    if (!selectedEngineerForAssignment) return;
+
+    try {
+      const ticketRef = doc(db, 'tickets', ticketId);
+      await updateDoc(ticketRef, {
+        responsible_engineer: selectedEngineerForAssignment
+      });
+      console.log(`Assigned engineer ${selectedEngineerForAssignment} to ticket ${ticketId}`);
+      setSelectedEngineerForAssignment('');
+    } catch (error) {
+      console.error('Error assigning engineer:', error);
+      alert('Failed to assign engineer. Please try again.');
+    }
+  };
+
   // Handle save event date (single ticket)
   const handleSaveEventDate = async () => {
     if (!selectedDate || !selectedTeam || !selectedTicket) return;
@@ -833,6 +885,7 @@ const FullTicketList = () => {
       const updateData: any = {
         date: selectedDate,
         isDateSet: true,
+        scheduledEventDate: selectedDate,
         supervisor_email: selectedTeamData.supervisorEmail || ''
       };
       
@@ -901,6 +954,7 @@ const FullTicketList = () => {
         const updateData: any = {
           date: selectedDate,
           isDateSet: true,
+          scheduledEventDate: selectedDate,
           supervisor_email: selectedTeamData.supervisorEmail || ''
         };
         
@@ -963,12 +1017,19 @@ const FullTicketList = () => {
   // Handle save note status
   const handleSaveNoteStatus = async () => {
     if (!selectedTicket || !editNoteStatus) return;
+    if (editNoteStatus === 'Material Completed' && !editInstallationDate) return;
 
     try {
       const ticketRef = doc(db, 'tickets', selectedTicket.id);
-      await updateDoc(ticketRef, {
+      const updateData: any = {
         noteStatus: editNoteStatus,
-      });
+      };
+
+      if (editNoteStatus === 'Material Completed') {
+        updateData.installationDate = editInstallationDate;
+      }
+
+      await updateDoc(ticketRef, updateData);
 
       setShowNoteStatusPopup(false);
     } catch (error) {
@@ -1328,6 +1389,11 @@ const FullTicketList = () => {
                           `}>
                             {ticket.severity}
                           </span>
+                          {!ticket.responsible_engineer && (
+                            <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-red-600 text-white animate-pulse">
+                              UNASSIGNED
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1452,6 +1518,53 @@ const FullTicketList = () => {
                     </div>
                   )}
 
+                  {isLikelyImageUrl(selectedTicket.attachmentUrl) && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className="bg-gray-50 dark:bg-meta-4 rounded-lg p-5"
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                          <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6 6H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2z" />
+                          </svg>
+                          Attachment
+                        </h3>
+                        <a
+                          href={selectedTicket.attachmentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-medium text-primary hover:underline"
+                        >
+                          Open
+                        </a>
+                      </div>
+
+                      <motion.button
+                        type="button"
+                        onClick={() => setSelectedImageUrl(selectedTicket.attachmentUrl || null)}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        className="w-full overflow-hidden rounded-xl border border-gray-200 dark:border-strokedark bg-white dark:bg-boxdark shadow-sm"
+                      >
+                        <div className="relative">
+                          <motion.img
+                            src={selectedTicket.attachmentUrl}
+                            alt="Ticket attachment"
+                            initial={{ opacity: 0, scale: 1.02 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.25 }}
+                            className="w-full max-h-80 object-contain bg-white dark:bg-boxdark"
+                            loading="lazy"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 hover:opacity-100 transition-opacity" />
+                        </div>
+                      </motion.button>
+                    </motion.div>
+                  )}
+
                   {/* People & Assignment Section */}
                   <div className="bg-purple-50 dark:bg-meta-4 rounded-lg p-5">
                     <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
@@ -1467,12 +1580,55 @@ const FullTicketList = () => {
                           <p className="text-base font-medium text-gray-900 dark:text-white mt-1">{selectedTicket.sender}</p>
                         </div>
                       )}
-                      {selectedTicket.responsible_engineer && (
-                        <div>
-                          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Assigned Engineer</label>
-                          <p className="text-base font-medium text-gray-900 dark:text-white mt-1">{selectedTicket.responsible_engineer}</p>
-                        </div>
-                      )}
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Assigned Engineer</label>
+                        {selectedTicket.responsible_engineer ? (
+                          <div className="flex flex-col gap-2">
+                             <p className="text-base font-medium text-gray-900 dark:text-white mt-1">{selectedTicket.responsible_engineer}</p>
+                             {isAdmin && (
+                                <button 
+                                  onClick={() => setSelectedTicket(prev => prev ? {...prev, responsible_engineer: ''} : null)}
+                                  className="text-xs text-primary hover:underline w-fit"
+                                >
+                                  Change Assignment
+                                </button>
+                             )}
+                          </div>
+                        ) : (
+                          <div className="mt-2 space-y-3">
+                            {isAdmin ? (
+                              <div className="flex flex-col gap-2">
+                                <select
+                                  value={selectedEngineerForAssignment}
+                                  onChange={(e) => setSelectedEngineerForAssignment(e.target.value)}
+                                  className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-boxdark focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                >
+                                  <option value="">Select Engineer</option>
+                                  {allEngineers.map((eng) => (
+                                    <option key={eng.email} value={eng.email}>
+                                      {eng.name} ({eng.email})
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  onClick={() => handleAssignEngineer(selectedTicket.id)}
+                                  disabled={!selectedEngineerForAssignment}
+                                  className="w-full px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-opacity-90 disabled:bg-opacity-50 transition-all"
+                                >
+                                  Assign Engineer
+                                </button>
+                              </div>
+                            ) : (
+                              <p className="text-base font-bold text-red-600 flex items-center gap-1">
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                Unassigned
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -1564,6 +1720,10 @@ const FullTicketList = () => {
                           setShowStatusPopup(!showStatusPopup);
                           setShowDatePopup(false);
                           setShowNoteStatusPopup(false);
+                          if (!showStatusPopup && selectedTicket) {
+                            setEditStatus(selectedTicket.status || '');
+                            setEditSeverity(selectedTicket.severity || '');
+                          }
                         }}
                         className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 font-medium transition-all ${
                           showStatusPopup
@@ -1594,6 +1754,8 @@ const FullTicketList = () => {
                         onClick={() => {
                           if (!showNoteStatusPopup && selectedTicket) {
                             setEditNoteStatus(selectedTicket.noteStatus || '');
+                            const d = selectedTicket.installationDate?.toDate?.() || (selectedTicket.installationDate ? new Date(selectedTicket.installationDate) : null);
+                            setEditInstallationDate(d instanceof Date && !isNaN(d.getTime()) ? d : null);
                           }
                           setShowNoteStatusPopup(!showNoteStatusPopup);
                           setShowDatePopup(false);
@@ -1620,59 +1782,60 @@ const FullTicketList = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                         </motion.svg>
                       </motion.button>
+
                     </div>
 
-                    {/* Expandable Sections */}
-                    <AnimatePresence mode="wait">
-                      {/* Set Event Date Section */}
-                      {showDatePopup && (
-                        <motion.div
-                          key="date-section"
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="bg-blue-50 dark:bg-meta-4 rounded-xl p-5 border border-primary/20">
-                            <div className="flex items-center justify-between mb-4">
-                              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                                <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                                Set Event Date
-                              </h3>
-                              <button
-                                onClick={() => setShowDatePopup(false)}
-                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
-                              >
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
-                            </div>
+                    {/* Set Event Date Section */}
+                    {showDatePopup && (
+                      <motion.div
+                        key="date-section"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="bg-blue-50 dark:bg-meta-4 rounded-xl p-5 border border-primary/20">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                              <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              Set Event Date
+                            </h3>
+                            <button
+                              onClick={() => setShowDatePopup(false)}
+                              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
 
-                            {/* Team Selection */}
-                            <div className="mb-4">
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Select Team
-                              </label>
-                              <select
-                                value={selectedTeam}
-                                onChange={(e) => setSelectedTeam(e.target.value)}
-                                className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
-                              >
-                                <option value="">Select a team</option>
-                                {teams.map((team) => (
-                                  <option key={team.id} value={team.id}>
-                                    {team.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
+                          <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Select Team
+                            </label>
+                            <select
+                              value={selectedTeam}
+                              onChange={(e) => setSelectedTeam(e.target.value)}
+                              className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
+                            >
+                              <option value="">Select a team</option>
+                              {teams.map((team) => (
+                                <option key={team.id} value={team.id}>
+                                  {team.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                            {/* Calendar */}
-                            <div className="mb-4 flex justify-center">
+                          <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Select Date
+                            </label>
+                            <div className="bg-white dark:bg-form-input rounded-lg border border-gray-300 dark:border-strokedark p-3">
                               <Calendar
                                 onChange={(value) => {
                                   if (value instanceof Date) {
@@ -1682,179 +1845,208 @@ const FullTicketList = () => {
                                   }
                                 }}
                                 value={selectedDate}
-                                className="rounded-lg border-0 shadow-sm w-full max-w-sm"
                                 minDate={new Date()}
                               />
                             </div>
-
-                            {/* Action Buttons */}
-                            <div className="flex flex-col sm:flex-row gap-3">
-                              <button
-                                onClick={() => setShowDatePopup(false)}
-                                className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-boxdark transition-all"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={handleSaveEventDate}
-                                disabled={!selectedTeam || !selectedDate}
-                                className="flex-1 rounded-lg bg-primary py-2.5 px-4 font-medium text-white hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                              >
-                                Save Event
-                              </button>
-                            </div>
                           </div>
-                        </motion.div>
-                      )}
 
-                      {/* Edit Status & Severity Section */}
-                      {showStatusPopup && (
-                        <motion.div
-                          key="status-section"
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="bg-green-50 dark:bg-meta-4 rounded-xl p-5 border border-meta-3/20">
-                            <div className="flex items-center justify-between mb-4">
-                              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                                <svg className="w-5 h-5 text-meta-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                                Edit Status & Severity
-                              </h3>
-                              <button
-                                onClick={() => setShowStatusPopup(false)}
-                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
-                              >
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                              {/* Status Selection */}
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                  Status
-                                </label>
-                                <select
-                                  value={editStatus}
-                                  onChange={(e) => setEditStatus(e.target.value)}
-                                  className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
-                                >
-                                  <option value="Open">Open</option>
-                                  <option value="In Progress">In Progress</option>
-                                  <option value="Resolved">Resolved</option>
-                                </select>
-                              </div>
-
-                              {/* Severity Selection */}
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                  Severity
-                                </label>
-                                <select
-                                  value={editSeverity}
-                                  onChange={(e) => setEditSeverity(e.target.value)}
-                                  className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
-                                >
-                                  <option value="Low">Low</option>
-                                  <option value="Medium">Medium</option>
-                                  <option value="High">High</option>
-                                  <option value="Critical">Critical</option>
-                                </select>
-                              </div>
-                            </div>
-
-                            {/* Action Buttons */}
-                            <div className="flex flex-col sm:flex-row gap-3">
-                              <button
-                                onClick={() => setShowStatusPopup(false)}
-                                className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-boxdark transition-all"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={handleSaveStatusAndSeverity}
-                                disabled={!editStatus || !editSeverity}
-                                className="flex-1 rounded-lg bg-meta-3 py-2.5 px-4 font-medium text-white hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                              >
-                                Save Changes
-                              </button>
-                            </div>
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            <button
+                              onClick={() => setShowDatePopup(false)}
+                              className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-boxdark transition-all"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleSaveEventDate}
+                              disabled={!selectedTeam || !selectedDate}
+                              className="flex-1 rounded-lg bg-primary py-2.5 px-4 font-medium text-white hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                            >
+                              Save Date
+                            </button>
                           </div>
-                        </motion.div>
-                      )}
+                        </div>
+                      </motion.div>
+                    )}
 
-                      {/* Edit Note Status Section */}
-                      {showNoteStatusPopup && (
-                        <motion.div
-                          key="note-section"
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="bg-orange-50 dark:bg-meta-4 rounded-xl p-5 border border-meta-5/20">
-                            <div className="flex items-center justify-between mb-4">
-                              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                                <svg className="w-5 h-5 text-meta-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                Edit Note Status
-                              </h3>
-                              <button
-                                onClick={() => setShowNoteStatusPopup(false)}
-                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
-                              >
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
-                            </div>
+                    {/* Edit Status & Severity Section */}
+                    {showStatusPopup && (
+                      <motion.div
+                        key="status-section"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="bg-green-50 dark:bg-meta-4 rounded-xl p-5 border border-meta-3/20">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                              <svg className="w-5 h-5 text-meta-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                              Edit Status & Severity
+                            </h3>
+                            <button
+                              onClick={() => setShowStatusPopup(false)}
+                              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
 
-                            {/* Note Status Selection */}
-                            <div className="mb-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
                               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Note Status
+                                Status
                               </label>
                               <select
-                                value={editNoteStatus}
-                                onChange={(e) => setEditNoteStatus(e.target.value)}
+                                value={editStatus}
+                                onChange={(e) => setEditStatus(e.target.value)}
                                 className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
                               >
-                                <option value="">Select Note Status</option>
-                                <option value="Quotation Sent">Quotation Sent</option>
-                                <option value="Material Not Complete">Material Not Complete</option>
-                                <option value="Under review">Under review</option>
+                                <option value="">Select Status</option>
+                                <option value="Open">Open</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="Pending">Pending</option>
+                                <option value="Resolved">Resolved</option>
                               </select>
                             </div>
-
-                            {/* Action Buttons */}
-                            <div className="flex flex-col sm:flex-row gap-3">
-                              <button
-                                onClick={() => setShowNoteStatusPopup(false)}
-                                className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-boxdark transition-all"
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Severity
+                              </label>
+                              <select
+                                value={editSeverity}
+                                onChange={(e) => setEditSeverity(e.target.value)}
+                                className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
                               >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={handleSaveNoteStatus}
-                                disabled={!editNoteStatus}
-                                className="flex-1 rounded-lg bg-meta-5 py-2.5 px-4 font-medium text-white hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                              >
-                                Save Changes
-                              </button>
+                                <option value="">Select Severity</option>
+                                <option value="Low">Low</option>
+                                <option value="Medium">Medium</option>
+                                <option value="High">High</option>
+                                <option value="Critical">Critical</option>
+                              </select>
                             </div>
                           </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            <button
+                              onClick={() => setShowStatusPopup(false)}
+                              className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-boxdark transition-all"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleSaveStatusAndSeverity}
+                              disabled={!editStatus || !editSeverity}
+                              className="flex-1 rounded-lg bg-meta-3 py-2.5 px-4 font-medium text-white hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                            >
+                              Save Changes
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* Edit Note Status Section */}
+                    {showNoteStatusPopup && (
+                      <motion.div
+                        key="note-section"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="bg-orange-50 dark:bg-meta-4 rounded-xl p-5 border border-meta-5/20">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                              <svg className="w-5 h-5 text-meta-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              Edit Note Status
+                            </h3>
+                            <button
+                              onClick={() => setShowNoteStatusPopup(false)}
+                              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+
+                          <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Note Status
+                            </label>
+                            <select
+                              value={editNoteStatus}
+                              onChange={(e) => {
+                                const next = e.target.value;
+                                setEditNoteStatus(next);
+                                if (next !== 'Material Completed') {
+                                  setEditInstallationDate(null);
+                                }
+                              }}
+                              className="w-full rounded-lg border border-gray-300 dark:border-strokedark bg-white dark:bg-form-input py-2.5 px-4 text-gray-900 dark:text-white outline-none transition focus:border-primary"
+                            >
+                              <option value="">Select Note Status</option>
+                              <option value="Quotation Sent">Quotation Sent</option>
+                              <option value="Material Not Complete">Material Not Complete</option>
+                              <option value="Under review">Under review</option>
+                              <option value="Inspection Completed">Inspection Completed</option>
+                              <option value="Material Completed">Material Completed</option>
+                            </select>
+                          </div>
+
+                          {editNoteStatus === 'Material Completed' && (
+                            <div className="mb-4">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Installation Date
+                              </label>
+                              <div className="bg-white dark:bg-form-input rounded-lg border border-gray-300 dark:border-strokedark p-3">
+                                <Calendar
+                                  onChange={(value) => {
+                                    if (value instanceof Date) {
+                                      setEditInstallationDate(value);
+                                    } else if (Array.isArray(value) && value[0] instanceof Date) {
+                                      setEditInstallationDate(value[0]);
+                                    }
+                                  }}
+                                  value={editInstallationDate}
+                                  minDate={new Date()}
+                                />
+                              </div>
+                              {!editInstallationDate && (
+                                <p className="mt-2 text-xs text-red-600">
+                                  Please select an installation date.
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            <button
+                              onClick={() => setShowNoteStatusPopup(false)}
+                              className="flex-1 rounded-lg border border-gray-300 dark:border-strokedark py-2.5 px-4 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-boxdark transition-all"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleSaveNoteStatus}
+                              disabled={!editNoteStatus || (editNoteStatus === 'Material Completed' && !editInstallationDate)}
+                              className="flex-1 rounded-lg bg-meta-5 py-2.5 px-4 font-medium text-white hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                            >
+                              Save Changes
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
                   </div>
 
                   {/* Conversation/Chat Section */}
@@ -2484,6 +2676,51 @@ const FullTicketList = () => {
             </motion.div>
           </motion.div>
         )}
+
+        <AnimatePresence>
+          {selectedImageUrl && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+              onClick={() => setSelectedImageUrl(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 10 }}
+                transition={{ duration: 0.2 }}
+                className="relative w-full max-w-5xl rounded-2xl overflow-hidden border border-white/10 bg-white dark:bg-boxdark shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-strokedark">
+                  <div className="text-sm font-semibold text-gray-900 dark:text-white">Image Preview</div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedImageUrl(null)}
+                    className="p-2 rounded-lg text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-meta-4 transition"
+                    aria-label="Close"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="p-4 bg-white dark:bg-boxdark">
+                  <motion.img
+                    src={selectedImageUrl}
+                    alt="Ticket attachment preview"
+                    className="w-full max-h-[75vh] object-contain"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.2 }}
+                  />
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </AnimatePresence>
     </div>
   );

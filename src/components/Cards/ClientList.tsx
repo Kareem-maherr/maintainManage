@@ -31,6 +31,7 @@ interface Engineer {
   name: string;
   email: string;
   role: string;
+  phone?: string;
 }
 
 interface Ticket {
@@ -167,21 +168,42 @@ const ClientList = () => {
     e.preventDefault();
     if (!selectedUser || !selectedEngineerId) return;
 
+    // Find the selected engineer to get their name and phone
+    const selectedEngineer = engineers.find(
+      (eng) => eng.email === selectedEngineerId || eng.id === selectedEngineerId,
+    );
+    if (!selectedEngineer) {
+      alert('Selected engineer was not found. Please re-open the modal and try again.');
+      return;
+    }
+
     try {
       const userRef = doc(db, 'users', selectedUser.id);
       await updateDoc(userRef, {
-        responsible_engineer: selectedEngineerId
+        responsible_engineer: selectedEngineerId,
+        assigned_engineer_name: selectedEngineer.name || '',
+        assigned_engineer_phone: selectedEngineer.phone || ''
       });
 
       // Update local state
       setUsers(users.map(user => 
         user.id === selectedUser.id 
-          ? { ...user, responsible_engineer: selectedEngineerId }
+          ? { 
+              ...user, 
+              responsible_engineer: selectedEngineerId,
+              assigned_engineer_name: selectedEngineer.name || '',
+              assigned_engineer_phone: selectedEngineer.phone || ''
+            }
           : user
       ));
       
       // Update selected user
-      setSelectedUser({ ...selectedUser, responsible_engineer: selectedEngineerId });
+      setSelectedUser({ 
+        ...selectedUser, 
+        responsible_engineer: selectedEngineerId,
+        assigned_engineer_name: selectedEngineer.name || '',
+        assigned_engineer_phone: selectedEngineer.phone || ''
+      } as User);
       
       setIsAssigningEngineer(false);
       setSelectedEngineerId('');

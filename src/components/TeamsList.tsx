@@ -10,7 +10,7 @@ import {
   doc,
   where,
 } from 'firebase/firestore';
-import { Cog6ToothIcon, UserGroupIcon, CalendarDaysIcon, MapPinIcon, BuildingOfficeIcon, XMarkIcon, PlusIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { Cog6ToothIcon, UserGroupIcon, CalendarDaysIcon, MapPinIcon, BuildingOfficeIcon, XMarkIcon, PlusIcon, TrashIcon, PencilIcon, FunnelIcon } from '@heroicons/react/24/outline';
 
 interface TeamMember {
   name: string;
@@ -48,15 +48,17 @@ interface Team {
   members: TeamMember[];
   createdAt?: any;
   team_engineer?: string;
+  team_engineers?: string[];
 }
 
 interface TeamsListProps {
   isAdmin: boolean;
   userEmail: string;
   filterByEngineer?: string;
+  onFilterByEngineerChange?: (engineerEmail: string) => void;
 }
 
-const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps) => {
+const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '', onFilterByEngineerChange }: TeamsListProps) => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [scheduledEvents, setScheduledEvents] = useState<ScheduledEvent[]>([]);
@@ -65,6 +67,8 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [editTeamName, setEditTeamName] = useState('');
   const [engineers, setEngineers] = useState<{id: string; email: string; displayName: string}[]>([]);
+  const [selectedEngineerEmails, setSelectedEngineerEmails] = useState<string[]>([]);
+  const [isEngineerFilterOpen, setIsEngineerFilterOpen] = useState(false);
   const [memberCount, setMemberCount] = useState('');
   const [memberNames, setMemberNames] = useState<string[]>([]);
   const [supervisor, setSupervisor] = useState('');
@@ -77,44 +81,94 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
     
     const teamsRef = collection(db, 'teams');
     
-    // Query logic based on user role and filter
-    let q;
-    
-    if (!isAdmin) {
-      // If not admin, only show teams assigned to the user
-      q = query(teamsRef, where('team_engineer', '==', userEmail));
-      console.log('TeamsList - Query Condition: Non-admin, teams assigned to user');
-    } else if (filterByEngineer && filterByEngineer.trim() !== '') {
-      // If admin and filter is active, show teams for that engineer
-      q = query(teamsRef, where('team_engineer', '==', filterByEngineer));
-      console.log(`TeamsList - Query Condition: Admin, filtered by engineer ${filterByEngineer}`);
-    } else {
-      // If admin and no filter, show all teams
-      q = query(teamsRef);
-      console.log('TeamsList - Query Condition: Admin, all teams');
-    }
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const teamsData = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        console.log('TeamsList - Team Data:', doc.id, data);
-        return {
-          id: doc.id,
-          ...data,
-        };
-      }) as Team[];
-
+    const mergeAndSetTeams = (snapshots: Array<{ docs: any[] }>) => {
+      const byId = new Map<string, Team>();
+      snapshots.forEach((snapshot) => {
+        snapshot.docs.forEach((d: any) => {
+          const data = d.data();
+          const team = {
+            id: d.id,
+            ...data,
+          } as Team;
+          byId.set(team.id, team);
+        });
+      });
+      const teamsData = Array.from(byId.values());
       console.log('TeamsList - Teams Count:', teamsData.length);
       console.log('TeamsList - Teams Data:', teamsData);
       setTeams(teamsData);
       setLoading(false);
+    };
+
+    // Query logic based on user role and filter
+    if (!isAdmin) {
+      // Prefer array-based assignment, but also support legacy single assignment
+      const qArray = query(teamsRef, where('team_engineers', 'array-contains', userEmail));
+      const qLegacy = query(teamsRef, where('team_engineer', '==', userEmail));
+
+      let snapArray: any = null;
+      let snapLegacy: any = null;
+
+      const unsubscribeArray = onSnapshot(qArray, (snapshot) => {
+        snapArray = snapshot;
+        if (snapLegacy) mergeAndSetTeams([snapArray, snapLegacy]);
+      });
+      const unsubscribeLegacy = onSnapshot(qLegacy, (snapshot) => {
+        snapLegacy = snapshot;
+        if (snapArray) mergeAndSetTeams([snapArray, snapLegacy]);
+      });
+
+      console.log('TeamsList - Query Condition: Non-admin, teams assigned to user (array + legacy)');
+
+      return () => {
+        unsubscribeArray();
+        unsubscribeLegacy();
+      };
+    }
+
+    if (filterByEngineer && filterByEngineer.trim() !== '') {
+      // Admin + filter
+      const qArray = query(teamsRef, where('team_engineers', 'array-contains', filterByEngineer));
+      const qLegacy = query(teamsRef, where('team_engineer', '==', filterByEngineer));
+
+      let snapArray: any = null;
+      let snapLegacy: any = null;
+
+      const unsubscribeArray = onSnapshot(qArray, (snapshot) => {
+        snapArray = snapshot;
+        if (snapLegacy) mergeAndSetTeams([snapArray, snapLegacy]);
+      });
+      const unsubscribeLegacy = onSnapshot(qLegacy, (snapshot) => {
+        snapLegacy = snapshot;
+        if (snapArray) mergeAndSetTeams([snapArray, snapLegacy]);
+      });
+
+      console.log(`TeamsList - Query Condition: Admin, filtered by engineer ${filterByEngineer} (array + legacy)`);
+
+      return () => {
+        unsubscribeArray();
+        unsubscribeLegacy();
+      };
+    }
+
+    // Admin + no filter
+    const qAll = query(teamsRef);
+    console.log('TeamsList - Query Condition: Admin, all teams');
+    const unsubscribeAll = onSnapshot(qAll, (snapshot) => {
+      mergeAndSetTeams([snapshot]);
     });
-    
-    // Clean up subscription when component unmounts
+
     return () => {
-      unsubscribe();
+      unsubscribeAll();
     };
   }, [isAdmin, userEmail, filterByEngineer]);
+
+  const handleSelectEngineerFilter = (engineerEmail: string) => {
+    if (onFilterByEngineerChange) {
+      onFilterByEngineerChange(engineerEmail);
+    }
+    setIsEngineerFilterOpen(false);
+  };
   
   // Separate useEffect for engineers data
   useEffect(() => {
@@ -206,6 +260,10 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
       setEditTeamName(team.name);
       setSupervisor(team.supervisor || '');
       setMemberNames(team.members.map((member) => member.name));
+      const existing = Array.isArray(team.team_engineers) && team.team_engineers.length > 0
+        ? team.team_engineers
+        : (team.team_engineer ? [team.team_engineer] : []);
+      setSelectedEngineerEmails(existing);
     }
   };
 
@@ -214,6 +272,29 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
     setEditTeamName('');
     setSupervisor('');
     setMemberNames([]);
+    setSelectedEngineerEmails([]);
+  };
+
+  const handleToggleEngineerAssignment = (engineerEmail: string) => {
+    setSelectedEngineerEmails((prev) => {
+      if (prev.includes(engineerEmail)) {
+        return prev.filter((e) => e !== engineerEmail);
+      }
+      return [...prev, engineerEmail];
+    });
+  };
+
+  const handleSaveEngineerAssignments = async (teamId: string) => {
+    try {
+      const teamDocRef = doc(db, 'teams', teamId);
+      const normalized = selectedEngineerEmails.filter(Boolean);
+      await updateDoc(teamDocRef, {
+        team_engineers: normalized,
+        team_engineer: normalized[0] || '',
+      });
+    } catch (error) {
+      console.error('Error updating team engineers:', error);
+    }
   };
 
   const handleUpdateTeamName = async (teamId: string) => {
@@ -334,9 +415,76 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
           className="w-1/3 min-w-[300px] bg-white dark:bg-boxdark rounded-xl shadow-sm flex flex-col relative z-10"
         >
           <div className="p-4 border-b border-gray-200 dark:border-strokedark">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              All Teams ({teams.length})
-            </h3>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  All Teams ({teams.length})
+                </h3>
+                {isAdmin && filterByEngineer && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    Filter: {engineers.find(eng => eng.email === filterByEngineer)?.displayName || filterByEngineer}
+                  </p>
+                )}
+              </div>
+
+              {isAdmin && (
+                <div className="relative">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setIsEngineerFilterOpen((v) => !v)}
+                    className={`p-2 rounded-lg transition-colors ${
+                      filterByEngineer
+                        ? 'bg-primary/10 text-primary'
+                        : 'bg-gray-100 dark:bg-meta-4 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                    aria-label="Filter by engineer"
+                  >
+                    <FunnelIcon className="h-5 w-5" />
+                  </motion.button>
+
+                  <AnimatePresence>
+                    {isEngineerFilterOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute right-0 mt-2 w-64 rounded-lg border border-gray-200 dark:border-strokedark bg-white dark:bg-boxdark shadow-lg z-20 overflow-hidden"
+                      >
+                        <button
+                          onClick={() => handleSelectEngineerFilter('')}
+                          className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                            filterByEngineer === ''
+                              ? 'bg-primary/10 text-primary'
+                              : 'hover:bg-gray-50 dark:hover:bg-meta-4 text-gray-700 dark:text-gray-200'
+                          }`}
+                        >
+                          All Engineers
+                        </button>
+                        <div className="max-h-64 overflow-y-auto">
+                          {engineers
+                            .filter((eng) => eng.email)
+                            .map((eng) => (
+                              <button
+                                key={eng.id}
+                                onClick={() => handleSelectEngineerFilter(eng.email)}
+                                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                                  filterByEngineer === eng.email
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'hover:bg-gray-50 dark:hover:bg-meta-4 text-gray-700 dark:text-gray-200'
+                                }`}
+                              >
+                                {eng.displayName || eng.email}
+                              </button>
+                            ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+            </div>
           </div>
           
           <div className="flex-1 overflow-y-auto">
@@ -397,7 +545,7 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
                             <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
                               {team.members?.length || 0} members
                             </span>
-                            {team.team_engineer && (
+                            {((team.team_engineers && team.team_engineers.length > 0) || team.team_engineer) && (
                               <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
                                 Assigned
                               </span>
@@ -503,6 +651,16 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           <span className="font-medium">Assigned Engineer:</span>{' '}
                           {engineers.find(eng => eng.email === selectedTeam.team_engineer)?.displayName || selectedTeam.team_engineer}
+                        </p>
+                      </div>
+                    )}
+                    {selectedTeam.team_engineers && selectedTeam.team_engineers.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          <span className="font-medium">Assigned Engineers:</span>{' '}
+                          {selectedTeam.team_engineers
+                            .map((email) => engineers.find((eng) => eng.email === email)?.displayName || email)
+                            .join(', ')}
                         </p>
                       </div>
                     )}
@@ -768,7 +926,7 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
                       </div>
 
                       {/* Assigned Engineer Info */}
-                      {team.team_engineer && (
+                      {((team.team_engineers && team.team_engineers.length > 0) || team.team_engineer) && (
                         <div className="pt-4 border-t border-gray-200 dark:border-strokedark">
                           <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
                             Assigned Engineer
@@ -778,11 +936,56 @@ const TeamsList = ({ isAdmin, userEmail, filterByEngineer = '' }: TeamsListProps
                               <UserGroupIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
                             </div>
                             <p className="text-sm font-medium text-green-800 dark:text-green-300">
-                              {engineers.find(eng => eng.email === team.team_engineer)?.displayName || team.team_engineer}
+                              {(
+                                (team.team_engineers && team.team_engineers.length > 0)
+                                  ? team.team_engineers
+                                      .map((email) => engineers.find((eng) => eng.email === email)?.displayName || email)
+                                      .join(', ')
+                                  : (engineers.find(eng => eng.email === team.team_engineer)?.displayName || team.team_engineer)
+                              )}
                             </p>
                           </div>
                         </div>
                       )}
+
+                      {/* Assign Engineers */}
+                      <div className="pt-4 border-t border-gray-200 dark:border-strokedark">
+                        <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                          Assign Engineers
+                        </label>
+                        <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-strokedark rounded-lg p-2 bg-gray-50 dark:bg-meta-4">
+                          {engineers
+                            .filter((eng) => eng.email)
+                            .map((eng) => (
+                              <label key={eng.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/60 dark:hover:bg-boxdark">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedEngineerEmails.includes(eng.email)}
+                                  onChange={() => handleToggleEngineerAssignment(eng.email)}
+                                  className="h-4 w-4"
+                                />
+                                <span className="text-sm text-gray-900 dark:text-white truncate">
+                                  {eng.displayName || eng.email}
+                                </span>
+                              </label>
+                            ))}
+                          {engineers.length === 0 && (
+                            <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-3">
+                              No engineers found.
+                            </p>
+                          )}
+                        </div>
+                        <div className="mt-3 flex justify-end">
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => handleSaveEngineerAssignments(team.id)}
+                            className="px-4 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-opacity-90"
+                          >
+                            Save Engineers
+                          </motion.button>
+                        </div>
+                      </div>
                     </div>
                   );
                 })()}

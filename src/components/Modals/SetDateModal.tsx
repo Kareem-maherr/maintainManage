@@ -13,6 +13,7 @@ interface Team {
   supervisor?: string;
   supervisorEmail?: string;
   team_engineer?: string;
+  team_engineers?: string[];
 }
 
 interface SetDateModalProps {
@@ -33,14 +34,14 @@ const SetDateModal = ({ isOpen, onClose, tickets }: SetDateModalProps) => {
       if (!currentUserEmail) return;
       
       const teamsCollection = collection(db, 'teams');
-      // Filter teams where team_engineer equals the current user's email
-      const q = query(teamsCollection, where('team_engineer', '==', currentUserEmail));
-      const teamsSnapshot = await getDocs(q);
-      const teamsData = teamsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Team[];
-      setTeams(teamsData);
+      // Prefer array-based assignment, but also support legacy single assignment
+      const qArray = query(teamsCollection, where('team_engineers', 'array-contains', currentUserEmail));
+      const qLegacy = query(teamsCollection, where('team_engineer', '==', currentUserEmail));
+      const [arraySnap, legacySnap] = await Promise.all([getDocs(qArray), getDocs(qLegacy)]);
+      const byId = new Map<string, Team>();
+      arraySnap.docs.forEach((d) => byId.set(d.id, ({ id: d.id, ...d.data() } as Team)));
+      legacySnap.docs.forEach((d) => byId.set(d.id, ({ id: d.id, ...d.data() } as Team)));
+      setTeams(Array.from(byId.values()));
     };
 
     fetchTeams();
